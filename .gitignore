@@ -1,0 +1,11 @@
+*.pyc
+
+*.sqlite3
+
+venv/
+
+#  WARNING: Do not commit these files!!!
+credentials.json
+token.json
+.env
+
