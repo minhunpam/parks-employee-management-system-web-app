@@ -1,5 +1,6 @@
 # Built-in modules
 import secrets
+import json
 
 # Django modules
 from django.shortcuts import render
@@ -10,6 +11,7 @@ from django.http import HttpResponseBadRequest, JsonResponse
 # Google modules
 from google_auth_oauthlib.flow import Flow
 from google.auth.transport.requests import Request
+from google.auth.exceptions import GoogleAuthError
 from google.oauth2 import id_token
 
 
@@ -39,14 +41,12 @@ def google_login(request):
 
 
     request.session["google_oauth_state"] = state
-    request.session["code_verifier"] = flow.code_verifier
+    request.session["google_oauth_code_verifier"] = flow.code_verifier
 
     return redirect(authorization_url)
 
 def google_callback(request):
-
-    # removes the state after retrieving it -> Makes the login attempt effectively single-use
-    # Maybe in the future, we have to change to make it multi-time-use
+    
     expected_state = request.session.pop("google_oauth_state", None)
     returned_state = request.GET.get("state")
 
@@ -76,22 +76,33 @@ def google_callback(request):
         state=expected_state,
     )
     flow.redirect_uri = settings.GOOGLE_OAUTH_REDIRECT_URI
-    flow.code_verifier = request.session["code_verifier"]
 
+    if not (code_verifier := request.session.pop(
+        "google_oauth_code_verifier",
+        None,
+    )):
+        return HttpResponseBadRequest("Missing OAuth code verifier.")
+
+    
+    flow.code_verifier = code_verifier
+    
     # Server-to-server authorization code exchange
     flow.fetch_token(
         authorization_response=request.build_absolute_uri()
     )
 
-    identity = id_token.verify_oauth2_token(
-        flow.credentials.id_token,
-        Request(),
-        settings.GOOGLE_OAUTH_CLIENT_ID,
-    )
-
+    try:
+        identity = id_token.verify_oauth2_token(
+            flow.credentials.id_token,
+            Request(),
+            settings.GOOGLE_OAUTH_CLIENT_ID,
+        )
+    except (GoogleAuthError, ValueError) as error:
+        return HttpResponseBadRequest(error)
+    
     if identity.get("email_verified") is not True:
         return HttpResponseBadRequest("Google email is not verified.")
-
+    
     return JsonResponse(
         {
             "sub": identity["sub"],
