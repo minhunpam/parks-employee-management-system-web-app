@@ -133,8 +133,14 @@ GOOGLE_OAUTH_CLIENT_ID = os.environ["GOOGLE_OAUTH_CLIENT_ID"]
 GOOGLE_OAUTH_CLIENT_SECRET = os.environ["GOOGLE_OAUTH_CLIENT_SECRET"]
 GOOGLE_OAUTH_REDIRECT_URI = os.environ["GOOGLE_OAUTH_REDIRECT_URI"]
 
+
+# Previously, this was GOOGLE_OAUTH_SCOPES = ["openid", "email", "profile"]
+# But Google translated the shorthand scopes into their canonical forms (current state)
+# The represent the same permissions, but OAuthlib compares their text and treats the difference
+# as a scope change
 GOOGLE_OAUTH_SCOPES = [
     "openid",
-    "email",
-    "profile",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
 ]
+
