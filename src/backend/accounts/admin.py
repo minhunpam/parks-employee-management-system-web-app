@@ -1,8 +1,10 @@
+# Django modules
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User
 
-# Register your models here.
+# Local modules
+from .models import User, GoogleConnection
+
 @admin.register(User) # Register User model in Django Admin using this UserAdmin configuration
 class UserAdmin(BaseUserAdmin):
     ordering = ("email",) # Users are sorted by email in ascending order
@@ -73,3 +75,30 @@ class UserAdmin(BaseUserAdmin):
         ),
     )
 
+@admin.register(GoogleConnection)
+class GoogleConnectionAdmin(admin.ModelAdmin):
+    list_display = (
+        "user",
+        "subject",
+        "granted_scopes",
+        "connected_at",
+        "updated_at",
+    ) # This controls which columns appear in the GoogleConnection overview table
+    search_fields = ("user__email", "subject")
+
+    readonly_fields = (
+        "user",
+        "subject",
+        "granted_scopes",
+        "encrypted_refresh_token",
+        "connected_at",
+        "updated_at",
+    )
+
+    @admin.display(boolean=True, description="Encrypted Refresh Token")
+    def has_encrypted_refresh_token(self, connection):
+        return bool(connection.encrypted_refresh_token)
+
+    def has_add_permission(self, request):
+        return False
+    

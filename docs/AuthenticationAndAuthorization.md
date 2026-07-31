@@ -28,3 +28,7 @@ User                 GoogeConnection
   - A `User` may have zero or one `GoogleConection`
 
 > For this application, most normal users will eventually have a connection. But keeping the models separate allows the application account and Google integration to have independent lifecycles
+
+`GoogleConnection` represents 2 relates states:
+1. Establish Google identity through `sub` claim
+2. Establish Drive authorization through the token and scopes

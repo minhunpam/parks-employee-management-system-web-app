@@ -5,7 +5,7 @@ import secrets
 from django.shortcuts import render
 from django.conf import settings
 from django.shortcuts import redirect
-from django.http import HttpResponseBadRequest, JsonResponse
+from django.http import HttpResponseBadRequest
 from django.contrib.auth import login
 
 # Google modules
@@ -14,19 +14,14 @@ from google.auth.transport.requests import Request
 from google.auth.exceptions import GoogleAuthError
 from google.oauth2 import id_token
 
-# Local
+# Local modules
 from .models import User, GoogleConnection
+from .google_oauth import build_google_client_config
 
 def google_login(request):
-    client_config = {
-        "web": {
-            "client_id": settings.GOOGLE_OAUTH_CLIENT_ID,
-            "client_secret": settings.GOOGLE_OAUTH_CLIENT_SECRET,
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-            "redirect_uris": [settings.GOOGLE_OAUTH_REDIRECT_URI],
-        }
-    }
+    client_config = build_google_client_config(
+        redirect_uri=settings.GOOGLE_OAUTH_REDIRECT_URI
+    )
 
     flow = Flow.from_client_config(
         client_config=client_config,
@@ -37,10 +32,8 @@ def google_login(request):
 
     authorization_url, state = flow.authorization_url(
         access_type="online",
-        include_granted_scopes="true",
         prompt="select_account",
     )
-
 
     request.session["google_oauth_state"] = state
     request.session["google_oauth_code_verifier"] = flow.code_verifier
@@ -62,15 +55,9 @@ def google_callback(request):
     if error := request.GET.get("error"):
         return HttpResponseBadRequest(f"Google authentication failed: {error}")
 
-    client_config = {
-        "web": {
-            "client_id": settings.GOOGLE_OAUTH_CLIENT_ID,
-            "client_secret": settings.GOOGLE_OAUTH_CLIENT_SECRET,
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-            "redirect_uris": [settings.GOOGLE_OAUTH_REDIRECT_URI],
-        }
-    }
+    client_config = build_google_client_config(
+        redirect_uri=settings.GOOGLE_OAUTH_REDIRECT_URI
+    )
 
     flow = Flow.from_client_config(
         client_config=client_config,
@@ -79,13 +66,9 @@ def google_callback(request):
     )
     flow.redirect_uri = settings.GOOGLE_OAUTH_REDIRECT_URI
 
-    if not (code_verifier := request.session.pop(
-        "google_oauth_code_verifier",
-        None,
-    )):
+    if not (code_verifier := request.session.pop("google_oauth_code_verifier",None)):
         return HttpResponseBadRequest("Missing OAuth code verifier.")
 
-    
     flow.code_verifier = code_verifier
     
     # Server-to-server authorization code exchange

@@ -145,7 +145,18 @@ GOOGLE_OAUTH_SCOPES = [
     "https://www.googleapis.com/auth/userinfo.profile",
 ]
 
+GOOGLE_DRIVE_REDIRECT_URI = os.environ["GOOGLE_DRIVE_REDIRECT_URI"]
+
+DRIVE_SCOPES = [
+    *GOOGLE_OAUTH_SCOPES,
+    "https://www.googleapis.com/auth/drive",
+]
+
+# This is used by the @login_required decorator 
+# to redirect users to the login page if they are not authenticated
+LOGIN_URL = "accounts:google-login"
+
+
 if __name__ == "__main__":
     print(f"Base Directory: {BASE_DIR.parent.parent}")
     print(f"DIRS: {TEMPLATES[0].get("DIRS")[0]}")
-

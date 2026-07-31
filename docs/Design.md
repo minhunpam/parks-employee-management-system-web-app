@@ -20,3 +20,4 @@
 ---
 - Django application `workspace` --- coordinates both Google Drive folders and Google Sheets operations
 - owns the PARKS folder, Drive authorization, and spreadsheet interactions
+    
