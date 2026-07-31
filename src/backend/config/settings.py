@@ -156,6 +156,8 @@ DRIVE_SCOPES = [
 # to redirect users to the login page if they are not authenticated
 LOGIN_URL = "accounts:google-login"
 
+FERNET_KEY = os.environ["FERNET_KEY"]
+
 
 if __name__ == "__main__":
     print(f"Base Directory: {BASE_DIR.parent.parent}")

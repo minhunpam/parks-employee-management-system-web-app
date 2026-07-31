@@ -1,5 +1,6 @@
 # Built-in modules
 import secrets
+from cryptography.fernet import Fernet
 
 # Django modules
 from django.shortcuts import render, redirect
@@ -97,6 +98,7 @@ def connect_callback(request):
     
     connection = request.user.google_connection
 
+    
     if identity["sub"] != connection.subject:
         return HttpResponseBadRequest(
             "Drive authorization used a different Google account."
@@ -106,9 +108,12 @@ def connect_callback(request):
         flow.credentials.scopes or []
     )
 
+    fernet = Fernet(settings.FERNET_KEY)
     print(f"credentials refresh token: {flow.credentials.refresh_token}")
     if flow.credentials.refresh_token:
-        connection.encrypted_refresh_token = flow.credentials.refresh_token
+        connection.encrypted_refresh_token = fernet.encrypt(
+            flow.credentials.refresh_token.encode()
+        ).decode()
     
     connection.save(
         update_fields=[
@@ -118,8 +123,4 @@ def connect_callback(request):
         ]
     )
 
-    print(f"connection: {connection if connection else 'None'}")
-    print(f"connection encrypted refresh token: {connection.encrypted_refresh_token if connection else 'None'}")
-    print(f"connection granted scopes: {connection.granted_scopes if connection else 'None'}")
-
-    return redirect("https://www.google.com")
+    return redirect("workspace:entry")
