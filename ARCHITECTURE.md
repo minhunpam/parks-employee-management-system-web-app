@@ -4,24 +4,31 @@
 
 This project is an employee management system for the PARKS restaurant. It provides a focused interface over Google Workspace so managers do not have to edit spreadsheets manually or run separate container-bound Google Apps Script functions for individual tasks.
 
-The first release will authenticate users with Google and let approved users interact with restaurant data in Google Sheets and permitted Google Drive files and folders. Later releases may add Gmail and other Google Workspace workflows.
+The first release authenticates one manager with Google and provides a focused workspace over one PARKS root folder shared from that manager's My Drive. The first Google Workspace operations are intentionally small: create a Google Sheets spreadsheet in that folder, read a cell range, and replace the values in a cell range. Existing Google Apps Script business workflows will be migrated later.
 
-## Goals
+## Current implementation status
 
-- Let approved managers sign in with Google.
-- Present employee data and common management actions in a simple interface.
-- Read and update operational data stored in Google Sheets.
-- Browse and manage Drive files used by the restaurant.
-- Keep Google credentials and tokens on the server.
-- Replace repetitive spreadsheet work with validated, auditable workflows.
-- Remain extensible for other Google Workspace APIs.
+The repository currently implements only the identity foundation:
 
-## Initial non-goals
+- A custom email-based Django `User`.
+- A one-to-one `GoogleConnection` keyed by Google's stable `sub` identifier.
+- Google authorization-code login with OAuth state validation and PKCE.
+- Creation of new users as inactive until manually approved.
+- An approval-pending page for inactive users.
+- A Django session for active users.
 
-- Recreating every Google Drive or Sheets feature.
-- Supporting arbitrary public Google accounts.
-- Supporting Gmail, sharing administration, version history, or Shared Drives.
-- Adding background synchronization before interactive workflows are stable.
+The current login flow requests only `openid`, email, and profile scopes. It uses online access, does not retain usable Drive credentials, and redirects an active user to `https://www.google.com/` as a temporary placeholder.
+
+The following agreed components are not implemented yet:
+
+- A separate Drive authorization flow with offline access.
+- Secure refresh-token encryption and persistence.
+- The Drive entry, connection, setup, and workspace pages.
+- Root-folder configuration and permanent workspace ownership.
+- Drive and Sheets service modules.
+- Google Sheets create, range-read, and range-write operations.
+
+Sections below describe the agreed target for the first release unless explicitly marked as current behavior.
 
 ## Technology stack
 
@@ -44,10 +51,11 @@ The first release will authenticate users with Google and let approved users int
 
 - Google Sheets for restaurant and employee operational data
 - Google Drive for files and folders
-- PostgreSQL for Django users, sessions, permissions, audit records, and encrypted Google refresh tokens
-- SQLite may be used for local development
+- **PostgreSQL** for Django users, sessions, permissions, audit records, and encrypted Google refresh tokens
+- **SQLite** may be used for local development
 
-Google Sheets is an operational data source, not a safe replacement for Django's security database. OAuth tokens, sessions, application permissions, and audit records must not be stored in a spreadsheet.
+- Google Sheets is an operational data source, not a safe replacement for Django's security database. 
+- OAuth tokens, sessions, application permissions, and audit records must not be stored in a spreadsheet.
 
 ## High-level architecture
 
@@ -96,7 +104,7 @@ src/backend/
 └── manage.py
 ```
 
-Names may be adapted to the existing repository, but Google API calls should remain in service modules rather than Django views.
+- Google API calls should remain in service modules rather than Django views.
 
 ## Authentication and authorization
 
@@ -132,14 +140,6 @@ POST /auth/google/disconnect/
 ```
 
 Request offline access during initial connection so Google can issue a refresh token. Do not force consent on every login; use it only for initial connection or recovery from a revoked connection.
-
-These concerns remain separate:
-
-- Google authentication establishes who the user is.
-- Application authorization establishes whether that person may use PARKS and which role they have.
-- OAuth scopes establish which Google resources the app may use.
-
-Access should initially use an allowlist or the restaurant's Workspace domain. A successful Google login alone must not grant manager permissions.
 
 ### Application roles
 
@@ -184,22 +184,12 @@ Sheets contains operational records such as employee information and schedules. 
 - Handling for missing, renamed, or malformed tabs.
 - Concurrency handling to prevent silent overwrites.
 
-Sheets access belongs behind repository-like functions:
-
-```python
-list_employees()
-get_employee(employee_id)
-create_employee(data)
-update_employee(employee_id, data)
-archive_employee(employee_id)
-```
-
 Views and templates should not know spreadsheet ranges or column positions.
 
-### Django database
+### Django Models/ Databases
 
 ```text
-User
+User <------ custom User
 - id
 - email
 - display name
@@ -221,7 +211,8 @@ AuditEvent
 - timestamp
 ```
 
-Use a custom Django user model from the beginning if implementation has not started. The Google `sub` claim, not email, is the durable Google identity. Access tokens are short-lived and normally need no permanent storage. Refresh tokens must be encrypted with a key kept separately from the database.
+- Access tokens are short-lived and normally need no permanent storage. 
+- Refresh tokens must be encrypted with a key kept separately from the database.
 
 ## Google Drive integration
 

@@ -136,7 +136,7 @@ def google_callback(request):
 
     login(request, user)
 
-    return redirect("https://www.google.com/")
+    return redirect("workspace:entry")
 
 def approval_pending(request):
     return render(
