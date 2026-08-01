@@ -2,21 +2,21 @@
 import secrets
 
 # Django modules
-from django.shortcuts import render
 from django.conf import settings
-from django.shortcuts import redirect
-from django.http import HttpResponseBadRequest
 from django.contrib.auth import login
+from django.http import HttpResponseBadRequest
+from django.shortcuts import redirect, render
 
 # Google modules
-from google_auth_oauthlib.flow import Flow
-from google.auth.transport.requests import Request
 from google.auth.exceptions import GoogleAuthError
+from google.auth.transport.requests import Request
 from google.oauth2 import id_token
+from google_auth_oauthlib.flow import Flow
 
 # Local modules
-from .models import User, GoogleConnection
 from .google_oauth import build_google_client_config
+from .models import GoogleConnection, User
+
 
 def google_login(request):
     client_config = build_google_client_config(
@@ -41,7 +41,7 @@ def google_login(request):
     return redirect(authorization_url)
 
 def google_callback(request):
-    
+
     expected_state = request.session.pop("google_oauth_state", None)
     returned_state = request.GET.get("state")
 
@@ -50,7 +50,7 @@ def google_callback(request):
         or not returned_state
         or not secrets.compare_digest(expected_state, returned_state)
     ):
-        return HttpResponseBadRequest("Invalid OAuth state.")
+        return HttpResponseBadRequest(b"Invalid OAuth state.")
 
     if error := request.GET.get("error"):
         return HttpResponseBadRequest(f"Google authentication failed: {error}")
@@ -67,10 +67,10 @@ def google_callback(request):
     flow.redirect_uri = settings.GOOGLE_OAUTH_REDIRECT_URI
 
     if not (code_verifier := request.session.pop("google_oauth_code_verifier",None)):
-        return HttpResponseBadRequest("Missing OAuth code verifier.")
+        return HttpResponseBadRequest(b"Missing OAuth code verifier.")
 
     flow.code_verifier = code_verifier
-    
+
     # Server-to-server authorization code exchange
     flow.fetch_token(
         authorization_response=request.build_absolute_uri()
@@ -84,10 +84,10 @@ def google_callback(request):
         )
     except (GoogleAuthError, ValueError) as error:
         return HttpResponseBadRequest(error)
-    
+
     if identity.get("email_verified") is not True:
         return HttpResponseBadRequest("Google email is not verified.")
-    
+
     subject = identity["sub"]
     email = identity["email"]
 
@@ -127,3 +127,5 @@ def approval_pending(request):
         "accounts/approval_pending.html",
         status=403
     )
+
+
