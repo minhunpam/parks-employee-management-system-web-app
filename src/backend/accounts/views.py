@@ -71,7 +71,7 @@ def google_callback(request):
 
     flow.code_verifier = code_verifier
 
-    # Server-to-server authorization code exchange
+    # Sends authorization code to Google's token endpoint and exchanges it for an access token
     flow.fetch_token(
         authorization_response=request.build_absolute_uri()
     )

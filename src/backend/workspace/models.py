@@ -13,4 +13,8 @@ class WorkspaceConfiguration(models.Model):
         max_length=255,
         unique=True,
     )
+    spreadsheet_id = models.CharField(
+        max_length=255,
+        blank=True,
+    )
     configured_at = models.DateTimeField(auto_now_add=True)

@@ -150,6 +150,7 @@ GOOGLE_DRIVE_REDIRECT_URI = os.environ["GOOGLE_DRIVE_REDIRECT_URI"]
 DRIVE_SCOPES = [
     *GOOGLE_OAUTH_SCOPES,
     "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/spreadsheets",
 ]
 
 # This is used by the @login_required decorator 

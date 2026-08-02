@@ -1,29 +1,31 @@
 # Built-in modules
 import secrets
-from cryptography.fernet import Fernet
-
-# Django modules
-from django.shortcuts import render, redirect
-from django.contrib.auth.decorators import login_required
-from django.views.decorators.http import require_GET
-from django.conf import settings
-from django.http import HttpResponseBadRequest
-
-# Google modules
-from google_auth_oauthlib.flow import Flow
-from google.oauth2 import id_token
-from google.auth.transport.requests import Request
-from google.auth.exceptions import GoogleAuthError
 
 # Local modules
 from accounts.google_oauth import build_google_client_config
 from accounts.models import GoogleConnection
+from cryptography.fernet import Fernet
+from django.conf import settings
+from django.contrib.auth.decorators import login_required
+from django.http import HttpResponseBadRequest
+
+# Django modules
+from django.shortcuts import redirect, render
+from django.views.decorators.http import require_GET
+from google.auth.exceptions import GoogleAuthError
+from google.auth.transport.requests import Request
+from google.oauth2 import id_token
+
+# Google modules
+from google_auth_oauthlib.flow import Flow
+
 from .models import WorkspaceConfiguration
+
 
 @login_required
 def entry(request):
     connection = getattr(request.user, "google_connection", None)
-    workspace_config = getattr(request.user, "workspace_configuration", None)
+    workspace_config = getattr(request.user, "owned_workspace", None)
 
     if (
         not connection 
@@ -35,7 +37,11 @@ def entry(request):
     if (
         connection
         and connection.encrypted_refresh_token
-        and (not workspace_config or not workspace_config.root_folder_id)
+        and (
+            not workspace_config
+            or not workspace_config.root_folder_id
+            or not workspace_config.spreadsheet_id
+        )
         and connection.granted_scopes
     ):
         return redirect("workspace:setup")
@@ -77,7 +83,7 @@ def connect_callback(request):
         or not returned_state
         or not secrets.compare_digest(expected_state, returned_state)
     ):
-        return HttpResponseBadRequest("Invalid OAuth state.")
+        return HttpResponseBadRequest(b"Invalid OAuth state.")
 
     client_config = build_google_client_config(
         redirect_uri=settings.GOOGLE_DRIVE_REDIRECT_URI
@@ -91,7 +97,7 @@ def connect_callback(request):
     flow.redirect_uri = settings.GOOGLE_DRIVE_REDIRECT_URI
 
     if not (code_verifier := request.session.pop("google_drive_code_verifier", None)):
-        return HttpResponseBadRequest("Missing OAuth code verifier.")
+        return HttpResponseBadRequest(b"Missing OAuth code verifier.")
     
     flow.code_verifier = code_verifier
 
@@ -159,7 +165,8 @@ def setup(request):
         .first()
     )
 
-    if configuration is not None and configuration.root_folder_id:
-        return redirect("workspace:entry")
-
-    return render(request, "workspace/setup.html")
+    return render(
+        request,
+        "workspace/setup.html",
+        {"configuration": configuration},
+    )

@@ -1,10 +1,12 @@
 *.pyc
-
 *.sqlite3
 
+# Virtual environment
 venv/
 
-#  WARNING: Do not commit these files!!!
+/src/frontend/apps_scripts/
+
+#  WARNING: Do not commit these files, since they contain sensitive credentials!!!
 credentials.json
 token.json
 .env
