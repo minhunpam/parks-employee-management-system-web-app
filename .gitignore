@@ -1,0 +1,18 @@
+*.sqlite3
+
+# Cache stuff
+*.pyc
+.ruff_cache/
+.__pycache__
+
+# Virtual environment
+venv/
+
+# Frontend build artifacts
+/src/frontend/apps_scripts/
+
+#  WARNING: Do not commit these files, since they contain sensitive credentials!!!
+credentials.json
+token.json
+.env
+

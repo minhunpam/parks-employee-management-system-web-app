@@ -1,0 +1,60 @@
+const page = document.querySelector("#setup-page");
+const form = document.querySelector("#setup-form");
+const setupStatus = document.querySelector("#setup-status");
+const saveUrl = page.dataset.saveUrl;
+
+function csrfToken() {
+    return document.cookie.split("; ")
+        .find((row) => row.startsWith("csrftoken="))
+        ?.split("=")[1];
+}
+
+async function saveSetup(payload) {
+    const response = await fetch(saveUrl, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": csrfToken(),
+        },
+        body: JSON.stringify(payload),
+    });
+
+  return {
+    original_response: response,
+    result: await response.json()
+  };
+}
+
+form.addEventListener("submit", async (event) => {
+  
+    event.preventDefault();
+    setupStatus.textContent = "Checking Google resources…";
+
+    const payload = Object.fromEntries(new FormData(form));
+    let result;
+
+    try {
+      result = await saveSetup(payload);
+
+      if (result.result.requires_confirmation) {
+          const confirmation = prompt(result.result.error);
+          if (confirmation === null) {
+              setupStatus.textContent = "Configuration change cancelled.";
+              return;
+          }
+
+          payload.confirmation = confirmation;
+          result = await saveSetup(payload);
+      }
+      
+      setupStatus.textContent = result.original_response.ok
+          ? "Workspace configuration saved."
+          : (result.result.error || "Setup could not be saved.");
+
+      if (result.original_response.ok) {
+          window.location.reload();
+      }
+    } catch (error) {
+        setupStatus.textContent = "Setup could not be saved. Please try again.";
+    }
+});

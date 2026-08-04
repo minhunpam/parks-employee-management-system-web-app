@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workspace setup</title>
+    {% load static %}
+    <script src="{% static 'workspace/setup.js' %}" defer></script>
+</head>
+<body>
+    <main>
+        <h1>Workspace setup</h1>
+        <p>Configure the Google Drive folder and spreadsheet used by this workspace.</p>
+
+        {% if configuration %}
+            <section aria-labelledby="saved-resources">
+                <h2 id="saved-resources">Saved resources</h2>
+                <dl>
+                    <dt>Drive root folder</dt>
+                    <dd>{{ configuration.root_folder_id|default:"Not configured" }}</dd>
+                    <dt>Main spreadsheet</dt>
+                    <dd>{{ configuration.spreadsheet_id|default:"Not configured" }}</dd>
+                </dl>
+            </section>
+        {% endif %}
+
+        <div
+            id="setup-page"
+            data-save-url="{% url 'workspace:setup-save' %}"
+        ></div>
+
+        <form id="setup-form">
+            {% csrf_token %}
+            <p>
+                <label for="root-folder-id">Drive root folder ID or URL</label>
+                <input
+                    id="root-folder-id"
+                    name="root_folder_id"
+                    type="text"
+                    value="{{ configuration.root_folder_id|default:'' }}"
+                    required
+                >
+            </p>
+            <p>
+                <label for="spreadsheet-id">Main spreadsheet ID or URL</label>
+                <input
+                    id="spreadsheet-id"
+                    name="spreadsheet_id"
+                    type="text"
+                    value="{{ configuration.spreadsheet_id|default:'' }}"
+                    required
+                >
+            </p>
+            <button type="submit">Save configuration</button>
+            <p id="setup-status" role="status"></p>
+        </form>
+    </main>
+</body>
+</html>
