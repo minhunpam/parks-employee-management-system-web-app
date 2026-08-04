@@ -1,25 +1,31 @@
 # Built-in modules
+from cryptography.fernet import Fernet
 import secrets
+import json
+
+# Django modules
+from django.views.decorators.http import require_GET, require_POST
+from django.http import HttpResponseBadRequest, JsonResponse
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import redirect, render
+from django.conf import settings
+
+# Google modules
+from google.auth.exceptions import GoogleAuthError
+from google.auth.transport.requests import Request
+from google_auth_oauthlib.flow import Flow
+from google.oauth2 import id_token
+from googleapiclient.errors import HttpError
 
 # Local modules
 from accounts.google_oauth import build_google_client_config
 from accounts.models import GoogleConnection
-from cryptography.fernet import Fernet
-from django.conf import settings
-from django.contrib.auth.decorators import login_required
-from django.http import HttpResponseBadRequest
-
-# Django modules
-from django.shortcuts import redirect, render
-from django.views.decorators.http import require_GET
-from google.auth.exceptions import GoogleAuthError
-from google.auth.transport.requests import Request
-from google.oauth2 import id_token
-
-# Google modules
-from google_auth_oauthlib.flow import Flow
-
 from .models import WorkspaceConfiguration
+from .google_resources import (
+    build_google_services,
+    parse_resource_id,
+    validate_resources,
+)
 
 
 @login_required
@@ -47,7 +53,11 @@ def entry(request):
         return redirect("workspace:setup")
     
 
-    return render(request, "workspace/entry.html")
+    return render(
+        request,
+        "workspace/setup.html",
+        {"configuration": workspace_config},
+    )
 
 @login_required
 def connect(request):
@@ -117,7 +127,7 @@ def connect_callback(request):
 
     if identity["sub"] != connection.subject:
         return HttpResponseBadRequest(
-            "Drive authorization used a different Google account."
+            b"Drive authorization used a different Google account."
         )
 
     connection.granted_scopes = list(
@@ -169,4 +179,83 @@ def setup(request):
         request,
         "workspace/setup.html",
         {"configuration": configuration},
+    )
+
+
+@login_required
+@require_POST
+def save_setup(request):
+    # print(request.body)
+    
+    try:
+        payload = json.loads(request.body)
+        root_folder_id = parse_resource_id(payload.get("root_folder_id", ""), "folder")
+        spreadsheet_id = parse_resource_id(payload.get("spreadsheet_id", ""), "spreadsheet")
+    except (ValueError, TypeError, json.JSONDecodeError) as error:
+        return JsonResponse({"error": str(error)}, status=400)
+
+    configuration = WorkspaceConfiguration.objects.filter(owner=request.user).first()
+    changed = configuration and (
+        configuration.root_folder_id != root_folder_id
+        or configuration.spreadsheet_id != spreadsheet_id
+    )
+    if changed and payload.get("confirmation") != "CHANGE WORKSPACE CONFIG":
+        return JsonResponse(
+            {
+                "error": "Type CHANGE WORKSPACE CONFIG to confirm this change.",
+                "requires_confirmation": True,
+            },
+            status=400,
+        )
+
+    connection = request.user.google_connection
+    try:
+        drive, sheets = build_google_services(connection)
+
+        # _list_files(drive)
+        
+        folder, spreadsheet = validate_resources(
+            drive, sheets, root_folder_id, spreadsheet_id
+        )
+    except PermissionError as error:
+        return JsonResponse({"error": str(error)}, status=403)
+    # except HttpError as error:
+    #     return JsonResponse(
+    #         {"error": f"Could not validate Google resources: {error}"},
+    #         status=400,
+    #     )
+
+    if configuration is None:
+        configuration = WorkspaceConfiguration(owner=request.user)
+        
+    configuration.root_folder_id = root_folder_id
+    configuration.spreadsheet_id = spreadsheet_id
+    configuration.save()
+    
+    has_employee_sheet = any(
+        sheet.get("properties", {}).get("title") == "Mitarbeiterdaten"
+        for sheet in spreadsheet.get("sheets", [])
+    )
+
+    if not has_employee_sheet:
+        return JsonResponse(
+            {
+                "status": "not_configured",
+                "workspace_status": "needs_attention",
+                "error": "The Mitarbeiterdaten sheet is missing.",
+            },
+            status=422,
+        )
+    
+    return JsonResponse(
+        {
+            "status": "configured",
+            "workspace_status": "ready",
+            "root_folder": {"id": folder["id"], "name": folder.get("name")},
+            "spreadsheet": {
+                "id": spreadsheet["spreadsheetId"],
+                "name": spreadsheet.get("properties", {}).get("title"),
+            },
+        },
+        status=200,
     )

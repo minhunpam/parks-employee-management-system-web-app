@@ -81,9 +81,11 @@ class GoogleConnectionAdmin(admin.ModelAdmin):
         "user",
         "subject",
         "granted_scopes",
+        "has_encrypted_refresh_token",
         "connected_at",
         "updated_at",
     ) # This controls which columns appear in the GoogleConnection overview table
+    
     search_fields = ("user__email", "subject")
 
     readonly_fields = (
