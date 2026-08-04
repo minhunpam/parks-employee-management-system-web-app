@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 import os
+from django.conf import STATICFILES_STORAGE_ALIAS
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -65,7 +66,7 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR.parent / "frontend"],
+        'DIRS': [BASE_DIR.parent / "frontend" / "templates"],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -125,7 +126,10 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATICFILES_DIRS = [
+    BASE_DIR.parent / "frontend" / "static",
+]
 
 AUTH_USER_MODEL = 'accounts.User'
 
@@ -163,3 +167,4 @@ FERNET_KEY = os.environ["FERNET_KEY"]
 if __name__ == "__main__":
     print(f"Base Directory: {BASE_DIR.parent.parent}")
     print(f"DIRS: {TEMPLATES[0].get("DIRS")[0]}")
+    print(f"STATICFILES_DIRS: {STATICFILES_DIRS[0]}")
