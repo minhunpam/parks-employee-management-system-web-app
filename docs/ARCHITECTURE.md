@@ -10,4 +10,7 @@
 - A user without a google connection is redirected to `workspace/connect/` endpoint to initiate a `GoogleConnection` instace with:
   - encrypted refresh token
   - granted scopes
-- A user with a google connection but without a workspace configuration that includes a valid Drive root folder id is redirected to `workspace/setup` endpoint to initiate a workspace configuration.
+- A user with a google connection but without a workspace configuration that includes a valid Drive root folder id and valid spreadsheet id is redirected to `workspace/setup` endpoint to initiate a workspace configuration.
+- To understand the workspace setup:
+  - Follow `docs/workspace-setup-plan.md` for the plan
+  - Follow `docs/workspace-setup-flow.md` for the the actual flow, where finsihed things are journaled
