@@ -4,8 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Workspace setup</title>
+    
     {% load static %}
-    <script src="{% static 'workspace/setup.js' %}" defer></script>
+    <script type="module" src="{% static 'workspace/setup.js' %}"></script>
 </head>
 <body>
     <main>
@@ -27,6 +28,7 @@
         <div
             id="setup-page"
             data-save-url="{% url 'workspace:setup-save' %}"
+            data-successful-redirect-url="{% url 'workspace:entry' %}"
         ></div>
 
         <form id="setup-form">

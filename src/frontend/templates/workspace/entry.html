@@ -4,8 +4,34 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Entry</title>
+    
+    {% load static %}
+    <script type="module" src="{% static 'workspace/entry.js' %}"></script>
 </head>
 <body>
-    <h2>Entry</h2>
+    <main>
+        {% if configuration %}
+            <section aria-labelledby="saved-resources">
+                <h2 id="saved-resources">Saved resources</h2>
+                <dl>
+                    <dt>Drive root folder</dt>
+                    <dd>{{ configuration.root_folder_id|default:"Not configured" }}</dd>
+                    <dt>Main spreadsheet</dt>
+                    <dd>{{ configuration.spreadsheet_id|default:"Not configured" }}</dd>
+                </dl>
+            </section>
+        {% endif %}
+
+        <div
+            id="entry-page"
+            data-csv-import-url="{% url 'workspace:csv-import' %}"
+        ></div>
+
+        {% csrf_token %}
+        
+        <button id="import-csv-button">Import CSV</button>
+        <p id="import-csv-status" role="status" aria-live="polite"></p>
+        
+    </main>
 </body>
 </html>

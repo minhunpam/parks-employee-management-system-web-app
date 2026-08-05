@@ -49,7 +49,7 @@ form.addEventListener("submit", async (event) => {
           : (result.result.error || "Setup could not be saved.");
 
       if (result.original_response.ok) {
-          window.location.reload();
+          window.location.assign(successfulRedirectUrl);
       }
 
     } catch (error) {

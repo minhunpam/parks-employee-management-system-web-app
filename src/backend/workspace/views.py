@@ -24,8 +24,9 @@ from .models import WorkspaceConfiguration
 from .google_resources import (
     build_google_services,
     parse_resource_id,
-    validate_resources,
+    prepare_csv_import_folder,
 )
+from utils.Validator import Validator
 
 
 @login_required
@@ -37,11 +38,93 @@ def entry(request):
     if validation_response is not None:
         return validation_response
     
-
     return render(
         request,
-        "workspace/setup.html",
-        {"configuration": workspace_config},
+        "workspace/entry.html",
+        {"configuration": configuration},
+    )
+
+@login_required
+@require_POST
+def csv_import(request):
+    connection = getattr(request.user, "google_connection", None)
+    configuration = getattr(request.user, "owned_workspace", None)
+
+    validation_response = Validator.validate_connection_and_configuration(connection, configuration)
+    if validation_response is not None:
+        return validation_response
+    
+    root_folder_id = configuration.root_folder_id
+    spreadsheet_id = configuration.spreadsheet_id
+
+    print(f"root_folder_id: {root_folder_id}")
+    print(f"spreadsheet_id: {spreadsheet_id}")
+
+    validation_response = Validator.validate_folder_and_spreadsheet_ids(connection, root_folder_id, spreadsheet_id)
+    validation_response_data = json.loads(validation_response.content)
+    
+    if validation_response.status_code != 200:
+        return JsonResponse(
+            {
+                "error": validation_response_data.get("error", "Invalid root folder or spreadsheet ID."),
+            },
+            status=validation_response.status_code,
+        )
+
+    folder = validation_response_data["folder"]
+    spreadsheet = validation_response_data["spreadsheet"]
+    
+    try:
+        drive, _ = build_google_services(connection)
+        import_state = prepare_csv_import_folder(drive, folder["id"])
+    except (HttpError, PermissionError, ValueError) as error:
+        return JsonResponse({"error": str(error)}, status=502)
+
+    if import_state["invalid_files"]:
+        return JsonResponse(
+            {
+                "status": "invalid_files",
+                "message": "Some CSV filenames do not follow the required convention.",
+                "folder": {
+                    "id": import_state["month_folder"]["id"],
+                    "name": import_state["folder_name"],
+                },
+                "invalid_files": import_state["invalid_files"],
+            },
+            status=422,
+        )
+
+    if not import_state["files"]:
+        return JsonResponse(
+            {
+                "status": "awaiting_upload",
+                "message": f"Upload employee CSV files to the {import_state['folder_name']} folder before importing."
+                ,
+                "folder": {
+                    "id": import_state["month_folder"]["id"],
+                    "name": import_state["folder_name"],
+                },
+            },
+            status=200,
+        )
+
+    return JsonResponse(
+        {
+            "status": "ready",
+            "folder": {
+                "id": import_state["month_folder"]["id"],
+                "name": import_state["folder_name"],
+            },
+            "files": [
+                {"id": file["id"], "name": file["name"]}
+                for file in import_state["files"]
+            ],
+            "spreadsheet": {
+                "id": spreadsheet["spreadsheetId"],
+                "name": spreadsheet.get("properties", {}).get("title"),
+            },
+        },
+        status=200,
     )
 
 @login_required
