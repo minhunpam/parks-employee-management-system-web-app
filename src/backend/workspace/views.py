@@ -31,26 +31,11 @@ from .google_resources import (
 @login_required
 def entry(request):
     connection = getattr(request.user, "google_connection", None)
-    workspace_config = getattr(request.user, "owned_workspace", None)
+    configuration = getattr(request.user, "owned_workspace", None)
 
-    if (
-        not connection 
-        or not connection.encrypted_refresh_token
-        or not connection.granted_scopes
-    ):
-        return redirect("workspace:connect")
-
-    if (
-        connection
-        and connection.encrypted_refresh_token
-        and (
-            not workspace_config
-            or not workspace_config.root_folder_id
-            or not workspace_config.spreadsheet_id
-        )
-        and connection.granted_scopes
-    ):
-        return redirect("workspace:setup")
+    validation_response = Validator.validate_connection_and_configuration(connection, configuration)
+    if validation_response is not None:
+        return validation_response
     
 
     return render(
@@ -185,7 +170,6 @@ def setup(request):
 @login_required
 @require_POST
 def save_setup(request):
-    # print(request.body)
     
     try:
         payload = json.loads(request.body)
@@ -209,22 +193,22 @@ def save_setup(request):
         )
 
     connection = request.user.google_connection
-    try:
-        drive, sheets = build_google_services(connection)
-
-        # _list_files(drive)
-        
-        folder, spreadsheet = validate_resources(
-            drive, sheets, root_folder_id, spreadsheet_id
+    
+    response = Validator.validate_folder_and_spreadsheet_ids(connection, root_folder_id, spreadsheet_id)
+    response_data = json.loads(response.content)
+    
+    if response.status_code != 200:
+        return JsonResponse(
+            {
+                "error": response_data.get("error", "Invalid root folder or spreadsheet ID."),
+            },
+            status=response.status_code,
         )
-    except PermissionError as error:
-        return JsonResponse({"error": str(error)}, status=403)
-    # except HttpError as error:
-    #     return JsonResponse(
-    #         {"error": f"Could not validate Google resources: {error}"},
-    #         status=400,
-    #     )
 
+    folder = response_data["folder"]
+    spreadsheet = response_data["spreadsheet"]
+    
+    
     if configuration is None:
         configuration = WorkspaceConfiguration(owner=request.user)
         

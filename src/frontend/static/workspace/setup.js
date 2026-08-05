@@ -1,13 +1,10 @@
+import { csrfToken } from "./common.js";
+
 const page = document.querySelector("#setup-page");
 const form = document.querySelector("#setup-form");
 const setupStatus = document.querySelector("#setup-status");
 const saveUrl = page.dataset.saveUrl;
-
-function csrfToken() {
-    return document.cookie.split("; ")
-        .find((row) => row.startsWith("csrftoken="))
-        ?.split("=")[1];
-}
+const successfulRedirectUrl = page.dataset.successfulRedirectUrl;
 
 async function saveSetup(payload) {
     const response = await fetch(saveUrl, {
@@ -19,10 +16,10 @@ async function saveSetup(payload) {
         body: JSON.stringify(payload),
     });
 
-  return {
-    original_response: response,
-    result: await response.json()
-  };
+    return {
+      original_response: response,
+      result: await response.json()
+    };
 }
 
 form.addEventListener("submit", async (event) => {
@@ -54,6 +51,7 @@ form.addEventListener("submit", async (event) => {
       if (result.original_response.ok) {
           window.location.reload();
       }
+
     } catch (error) {
         setupStatus.textContent = "Setup could not be saved. Please try again.";
     }
