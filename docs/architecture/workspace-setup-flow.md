@@ -11,6 +11,9 @@
 - It makes POST request with request's body being the passed-in payload to the Django backend.
 - [Backend handles the request](#how-django-backend-handles-the-request)
 - Frontend receives the response, then handles and displays the result to the user accordingly.
+  - For a successful setup, it will navigate the user to the entry page, in which the UI for main logic will be displayed.
+    - **[See this documentation to understand more](/home/minhun/dev/parks/parks-employee-management-system-web-app/docs/architecture/main-logic-flow.md)**
+---
 
 ## How Django backend handles the request
 - The first thing the backend does is with the request's body is:

@@ -18,6 +18,9 @@ from .google_oauth import build_google_client_config
 from .models import GoogleConnection, User
 
 
+PENDING_APPROVAL_USER_SESSION_KEY = "pending_approval_user_id"
+
+
 def google_login(request):
     client_config = build_google_client_config(
         redirect_uri=settings.GOOGLE_OAUTH_REDIRECT_URI
@@ -115,6 +118,9 @@ def google_callback(request):
         )
 
     if not user.is_active:
+        # Keep the user associated with the approval page without authenticating
+        # them. The page uses this ID to detect activation on refresh.
+        request.session[PENDING_APPROVAL_USER_SESSION_KEY] = user.pk
         return redirect("accounts:approval-pending")
 
     login(request, user)
@@ -122,6 +128,15 @@ def google_callback(request):
     return redirect("workspace:entry")
 
 def approval_pending(request):
+    pending_user_id = request.session.get(PENDING_APPROVAL_USER_SESSION_KEY)
+    if pending_user_id:
+        user = User.objects.filter(pk=pending_user_id).first()
+
+        if user and user.is_active:
+            request.session.pop(PENDING_APPROVAL_USER_SESSION_KEY, None)
+            login(request, user)
+            return redirect("workspace:entry")
+
     return render(
         request,
         "accounts/approval_pending.html",

@@ -12,4 +12,9 @@
 ## Where knowledge now lives
 - Read the source that answers the question being asked
 - The architecture documents govern internal shape only
-- Follow `/docs/workspace-setup-plan.md` to understand the workspace setup plan
+
+---
+
+- Follow `/docs/architecture/workspace-setup-plan.md` to understand the workspace setup plan
+- Follow `docs/architecture/workspace-setup-flow.md` to understand the workspace setup flow (things that have already existed in the current code base)
+- Follow `docs/architecture/main-logic-flow.md` to understand the main logic flow
