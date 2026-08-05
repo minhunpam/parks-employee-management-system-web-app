@@ -36,3 +36,31 @@ root_folder
   - For example, currently it is August, which means we need to work with previous month, which is July. If the July subfolder is empty, ask the user to upload employee csv files into that subfolder
   - If the July subfolder is not empty, iteratively check the naming convention of the CSV files inside it
 
+#### Explain the regular expression pattern used to validate CSV filenames
+```python
+CSV_FILENAME = re.compile(
+    r"^Schicht_(?P<employee_name>.+)_(?P<month>[^_]+)_(?P<year>20\d{2})\.csv$"
+)
+```
+- `r"..."` - raw string. Backslashes are treated as literal characters
+- `^` - beginning of the string
+- `Schicht_` - literal string `Schicht_`
+- `(?P<employee_name>.+)` 
+  - `(` - start a capturing group
+  - `?P<employee_name>` - named group `employee_name`
+  - `.+` - matches any non-empty string
+  - `)` - end the capturing group
+- `_` - after the employee name, matches the underscore separator between the employee name and the month
+- `(?P<month>[^_]+)` - named group `month`
+  -  `[^_]+` - matches one or more characters that are not underscores
+    - `[..]` defines a character class
+    - `^` inside the character class
+    - `_` is the excluded character
+    - `+` - matches one or more characters
+- `_(?P<year>20\d{2})` - named group `year`
+  - `20\d{2}` - matches any string starting with `20` and followed by two digits === 2000 - 2099
+- `\.csv` 
+  - `\.` - literal `.` character. The dot must be escaped with a backslash because an unescaped dot means "any character"
+  - `csv` - literal `csv` string
+- `$` - end of the string
+
