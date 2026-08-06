@@ -21,7 +21,7 @@ from googleapiclient.errors import HttpError
 from accounts.google_oauth import build_google_client_config
 from accounts.models import GoogleConnection
 from .models import WorkspaceConfiguration
-from .google_resources import GoogleResources
+from .google_resources import GoogleResources, CsvParser
 from utils.Validator import Validator
 
 
@@ -117,7 +117,7 @@ def _csv_import_state_response(context):
                     "name": import_state["folder_name"],
                 },
             },
-            status=200,
+            status=400,
         )
 
     return JsonResponse(
@@ -155,17 +155,72 @@ def csv_import(request):
     if isinstance(context, JsonResponse):
         return context
 
-    state_response = _csv_import_state_response(context)
-    if state_response.status_code != 200:
-        return state_response
+    import_state = context["import_state"]
+    spreadsheet = context["spreadsheet"]
+    drive = context["drive"]
 
-    # The parsing and Sheets-writing phase will be added here. Keeping the
-    # revalidation in this endpoint makes it independent from the check call.
+    response = _csv_import_state_response(context)
+    if response.status_code != 200:
+        return response
+
+    month, year = import_state["folder_name"].split("_")
+    parsed_files = []
+    errors = []
+
+    for file in import_state["files"]:
+        try:
+            content = GoogleResources.download_file_content(
+                drive, file["id"]
+            )
+            parsed_file = CsvParser.parse_csv_content(
+                content,
+                file["name"],
+                expected_month=6, #For testing only
+                expected_year=int(year),
+            )
+            parsed_files.append(
+                {
+                    "id": file["id"],
+                    "name": file["name"],
+                    "employee": parsed_file["employee"],
+                    "entry_count": len(parsed_file["entries"]),
+                    "entries": parsed_file["entries"],
+                }
+            )
+        except (HttpError, ValueError, UnicodeDecodeError) as error:
+            errors.append(
+                {
+                    "file": file["name"], 
+                    "error": str(error),
+                },
+            )
+
+    if errors:
+        return JsonResponse(
+            {
+                "status": "invalid_csv_content",
+                "message": "Some CSV files could not be parsed.",
+                "errors": errors,
+            },
+            status=422,
+        )
+
+    
+
+    
     return JsonResponse(
-        {"error": "CSV import execution is not implemented yet."},
-        status=501,
+        {
+            "status": "parsed",
+            "message": "All CSV files were downloaded and parsed successfully.",
+            "spreadsheet": {
+                "id": spreadsheet["spreadsheetId"],
+                "name": spreadsheet.get("properties", {}).get("title"),
+            },
+            "files": parsed_files,
+        },
+        status=200,
     )
-
+    
 @login_required
 def connect(request):
     client_config = build_google_client_config(

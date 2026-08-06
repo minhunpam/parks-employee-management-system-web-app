@@ -56,6 +56,8 @@ importCsvButton_Import.addEventListener("click", async () => {
       "X-CSRFToken": csrfToken(),
     },
   });
+
   const result = await response.json();
+  console.log(result);
   
 });

@@ -1,5 +1,7 @@
+import csv
+import io
 import re
-from datetime import date
+from datetime import date, datetime
 from urllib.parse import parse_qs, urlparse
 
 from cryptography.fernet import Fernet
@@ -7,8 +9,7 @@ from django.conf import settings
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
-
-from accounts.models import GoogleConnection
+from googleapiclient.http import MediaIoBaseDownload
 
 
 class GoogleResources:
@@ -48,7 +49,7 @@ class GoogleResources:
         return value
 
     @staticmethod
-    def build_services(connection: GoogleConnection):
+    def build_services(connection):
         refresh_token = Fernet(settings.FERNET_KEY).decrypt(
             connection.encrypted_refresh_token.encode()
         ).decode()
@@ -146,7 +147,7 @@ class GoogleResources:
         invalid_files = []
         valid_files = []
         for item in files:
-            match = GoogleResources.CSV_FILENAME.fullmatch(item.get("name", ""))
+            match = re.fullmatch(GoogleResources.CSV_FILENAME, item.get("name", ""))
             if (
                 not match
                 or match.group("month") != german_month
@@ -167,6 +168,24 @@ class GoogleResources:
             "files": valid_files,
             "invalid_files": invalid_files,
         }
+
+    @staticmethod
+    def download_file_content(drive, file_id):
+        request = drive.files().get_media(
+            fileId=file_id,
+        )
+        buffer = io.BytesIO()
+        downloader = MediaIoBaseDownload(buffer, request)
+
+        done = False
+        while not done:
+            _, done = downloader.next_chunk()
+
+        content = buffer.getvalue()
+        if content.lstrip().startswith(b"{"):
+            raise ValueError("Google Drive returned file metadata instead of CSV content.")
+
+        return content
 
     @staticmethod
     def validate_resources(drive, sheets, root_folder_id, spreadsheet_id):
@@ -195,4 +214,84 @@ class GoogleResources:
             spreadsheetId=spreadsheet_id,
             fields="spreadsheetId,properties(title),sheets(properties(title))",
         ).execute()
+        
         return folder, spreadsheet
+
+class CsvParser:
+    @staticmethod
+    def parse_csv_content(content, file_name, expected_month, expected_year):
+        try:
+            text = content.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            text = content.decode("cp1252")
+
+        filename_match = re.fullmatch(GoogleResources.CSV_FILENAME, file_name)
+        if not filename_match:
+            raise ValueError("The CSV filename does not follow the required convention.")
+
+        entries = []
+        reader = csv.reader(io.StringIO(text), delimiter=";")
+        for line_number, row in enumerate(reader, start=1):
+            cells = [str(cell or "").strip() for cell in row]
+            date_value = next(
+                (
+                    cell for cell in cells
+                    if re.fullmatch(r"\d{2}\.\d{2}\.20\d{2}", cell)
+                ),
+                None,
+            )
+            times = [
+                cell for cell in cells
+                if re.fullmatch(r"\d{2}:\d{2}", cell)
+            ]
+
+            if not date_value:
+                continue
+            if len(times) < 2:
+                continue
+
+            parsed_date = datetime.strptime(date_value, "%d.%m.%Y")
+            if (
+                parsed_date.month != expected_month
+                or parsed_date.year != expected_year
+            ):
+                raise ValueError(
+                    f"Line {line_number} contains a date ({parsed_date}) outside the target month."
+                )
+
+            remark = next(
+                (
+                    cell for cell in cells
+                    if cell == "18=Dienstschluß" or cell == "19=Pause"
+                ),
+                None,
+            )
+            
+            entries.append(
+                {
+                    "date": date_value,
+                    "start": times[0],
+                    "end": times[1],
+                    "remark": remark,
+                }
+            )
+
+        if not entries:
+            raise ValueError("The CSV contains no importable work entries.")
+
+        return {
+            "employee": filename_match.group("employee_name"),
+            "file_name": file_name,
+            "entries": entries,
+        }
+
+
+if __name__ == "__main__":
+    test_file_path = "/home/minhun/dev/parks/parks-employee-management-system-web-app/csv_raw_data/Schicht_Ademir_Juni_2026.csv"
+    with open(test_file_path, newline="", encoding="cp1252") as f:
+        reader = csv.reader(f, delimiter=";")
+
+        for line_number, row in enumerate(reader, start=1):
+            # print(f"Line {line_number}: {row}")
+            cells = [str(cell or "").strip() for cell in row]
+            print(cells)

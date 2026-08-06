@@ -57,6 +57,10 @@ The import endpoint is called only after the user clicks **Import data**.
   1. Revalidate the Google connection, workspace configuration, folder, and spreadsheet.
   2. Reinspect the target month folder and ignore `[ARCHIVED]` files.
   3. Download and parse every active CSV file.
+    - “Download” means fetching the CSV’s contents from Google Drive to the backend using
+     its file ID. It does not mean downloading it to the user’s computer or permanently
+     saving it on the server.
+    - “Parse” means interpreting the downloaded text and converting it into structured data:
   4. Validate every file before changing the spreadsheet.
   5. Identify the employee from the filename and/or CSV content.
   6. Group entries by employee and date.
