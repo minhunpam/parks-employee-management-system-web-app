@@ -7,17 +7,16 @@ from django.conf import settings
 from django.test import SimpleTestCase
 
 # Local modules
-from .google_resources import parse_resource_id
-from .google_resources import build_google_services
+from .google_resources import GoogleResources
 
 class ParseResourceIdTests(SimpleTestCase):
        def test_plain_folder_id(self):
-           result = parse_resource_id("folder123", "folder")
+           result = GoogleResources.parse_resource_id("folder123", "folder")
 
            self.assertEqual(result, "folder123")
 
        def test_folder_url(self):
-           result = parse_resource_id(
+           result = GoogleResources.parse_resource_id(
                "https://drive.google.com/drive/folders/folder123?usp=sharing",
                "folder",
            )
@@ -25,7 +24,7 @@ class ParseResourceIdTests(SimpleTestCase):
            self.assertEqual(result, "folder123")
 
        def test_spreadsheet_url(self):
-           result = parse_resource_id(
+           result = GoogleResources.parse_resource_id(
                "https://docs.google.com/spreadsheets/d/sheet456/edit",
                "spreadsheet",
            )
@@ -33,7 +32,7 @@ class ParseResourceIdTests(SimpleTestCase):
            self.assertEqual(result, "sheet456")
 
        def test_url_with_query_id(self):
-           result = parse_resource_id(
+           result = GoogleResources.parse_resource_id(
                "https://drive.google.com/open?id=resource789",
                "folder",
            )
@@ -42,7 +41,7 @@ class ParseResourceIdTests(SimpleTestCase):
 
        def test_empty_value_raises_error(self):
            with self.assertRaises(ValueError):
-               parse_resource_id("", "folder")
+               GoogleResources.parse_resource_id("", "folder")
 
        def test_invalid_url_raises_error(self):
            '''
@@ -50,7 +49,7 @@ class ParseResourceIdTests(SimpleTestCase):
            parsing and fails in the last condition
            '''
            with self.assertRaises(ValueError):
-               parse_resource_id("https://example.com/file123", "folder")
+               GoogleResources.parse_resource_id("https://example.com/file123", "folder")
 
 class BuildGoogleResourcesTests(SimpleTestCase):
     def test_builds_drive_and_sheets_services(self):
@@ -78,7 +77,7 @@ class BuildGoogleResourcesTests(SimpleTestCase):
                 side_effect=[drive_service, sheets_service],
             ) as build_class,
         ):
-            result = build_google_services(connection)
+            result = GoogleResources.build_services(connection)
 
         self.assertEqual(result, (drive_service, sheets_service))
 
