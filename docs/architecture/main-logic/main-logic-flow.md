@@ -14,6 +14,9 @@
   - Validate folder and spreadsheet IDs
     - The previous configuration might become stale, since the user can delete either of them
 - After that, the returned folder and spreadsheet would be handled
+- From the returned folder, the month/year subfolders are recursively created if they don't exist via `prepare_csv_import_folder()` which eventually returns an import state
+- Depends on the `import_state`, different responses back to the user are sent
+  - Most likely it would ask the user to upload employee csv files into the Drive month subfolder
 
 ---
 

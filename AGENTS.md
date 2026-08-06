@@ -17,4 +17,5 @@
 
 - Follow `/docs/architecture/workspace-setup-plan.md` to understand the workspace setup plan
 - Follow `docs/architecture/workspace-setup-flow.md` to understand the workspace setup flow (things that have already existed in the current code base)
-- Follow `docs/architecture/main-logic-flow.md` to understand the main logic flow
+- Follow `docs/architecture/main-logic/main-logic-flow.md` to understand the main logic flow. The main logic is comprised of many steps, including:
+  - Import data from imported CSV files into the configured spreadsheet --- Follow `docs/architecture/main-logic/csv-import-logic-flow.md`
