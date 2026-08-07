@@ -58,6 +58,7 @@ importCsvButton_Import.addEventListener("click", async () => {
   });
 
   const result = await response.json();
+  importCsvButton_Import.disabled = false;
   console.log(result);
   
 });

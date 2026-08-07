@@ -66,7 +66,8 @@ The import endpoint is called only after the user clicks **Import data**.
   6. Group entries by employee and date.
   7. Calculate the daily result:
       - service start
-      - break start and end
+      - break start
+      - break end
       - service end
       - break minutes
       - working hours
@@ -121,3 +122,71 @@ A sample input file is available in `csv_raw_data/`, for example:
 ```text
 csv_raw_data/Schicht_Ademir_Juni_2026.csv
 ```
+
+## CSV Content Parsing
+- Decode the CSV content using encoding: `windows-1252`.
+- Check if the parsed filename matches completely with the expected format.
+- Read row by row and fetch data values from cell
+  - Working date:
+    - Check for format matching
+    - Check whether the data value's month and year match the expected month and year. Otherwise, the csv file's data is corrupted
+  - Working hours:
+    - Check format matching
+    - If the format matches, append to a list
+    - The list must only have 2 elements, which are the start and end times of the working interval
+  - Remark:
+    - The remark is fetched from the cell value
+    - The remark be:
+      1. "18=Dienstschluß"
+      2. "19=Pause"
+      3. `null`
+
+### Handle `entries` dictionary
+- Before this handling starts, the `entries` dictionary has form:
+```
+{
+    "<working_date>": [
+        {
+            "start": "<start_time>",
+            "end": "<end_time>",
+            "remark": "<remark>"
+        },
+        {
+            "start": "<start_time>",
+            "end": "<end_time>",
+            "remark": "<remark>"
+        },
+        ...
+    ], 
+    ...
+}
+```
+- After the handling, the `entries` dictionary should have the following form:
+```
+{
+    "<working_date>": 
+        {
+            "shift_start": "<shift_start_time>",
+            "pause_start": "<pause_start_time>",
+            "pause_end": "<pause_end_time>",
+            "shift_end": "<shift_end_time>",
+            "shift_total_time": "<shift_total_time>",
+            "pause_total_time": "<pause_total_time>",
+            "type of day": "<type_of_day>",
+        },
+    "<working_date>": 
+        {
+            "shift_start": "<shift_start_time>",
+            "pause_start": "<pause_start_time>",
+            "pause_end": "<pause_end_time>",
+            "shift_end": "<shift_end_time>",
+            "shift_total_time": "<shift_total_time>",
+            "pause_total_time": "<pause_total_time>",
+            "type of day": "<type_of_day>",
+        },
+    ...
+}
+```
+
+Type of the day includes:
+- Working day (at least for now)

@@ -1,4 +1,6 @@
 # Built-in modules
+import re
+
 from cryptography.fernet import Fernet
 import secrets
 import json
@@ -16,12 +18,13 @@ from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import Flow
 from google.oauth2 import id_token
 from googleapiclient.errors import HttpError
+from httplib2 import GoogleLoginAuthentication
 
 # Local modules
 from accounts.google_oauth import build_google_client_config
 from accounts.models import GoogleConnection
 from .models import WorkspaceConfiguration
-from .google_resources import GoogleResources, CsvParser
+from .google_resources import GoogleResources, CsvParser, GoogleSheetsHelper
 from utils.Validator import Validator
 
 
@@ -61,7 +64,7 @@ def _validated_csv_import_context(request):
         return validation_response
 
     try:
-        drive, sheets, folder, spreadsheet = (
+        drive_service, sheets_service, folder, spreadsheet = (
             Validator.get_validated_workspace_resources(
                 connection,
                 configuration.root_folder_id,
@@ -69,7 +72,7 @@ def _validated_csv_import_context(request):
             )
         )
         import_state = GoogleResources.prepare_csv_import_folder(
-            drive, folder["id"]
+            drive_service, folder["id"]
         )
     except PermissionError as error:
         return JsonResponse({"error": str(error)}, status=403)
@@ -79,8 +82,8 @@ def _validated_csv_import_context(request):
         return JsonResponse({"error": str(error)}, status=502)
 
     return {
-        "drive": drive,
-        "sheets": sheets,
+        "drive_service": drive_service,
+        "sheets_service": sheets_service,
         "folder": folder,
         "spreadsheet": spreadsheet,
         "import_state": import_state,
@@ -157,8 +160,11 @@ def csv_import(request):
 
     import_state = context["import_state"]
     spreadsheet = context["spreadsheet"]
-    drive = context["drive"]
-
+    spreadsheet_id = spreadsheet["spreadsheetId"]
+    
+    drive_service = context["drive_service"]
+    sheets_service = context["sheets_service"]
+    
     response = _csv_import_state_response(context)
     if response.status_code != 200:
         return response
@@ -170,7 +176,7 @@ def csv_import(request):
     for file in import_state["files"]:
         try:
             content = GoogleResources.download_file_content(
-                drive, file["id"]
+                drive_service, file["id"]
             )
             parsed_file = CsvParser.parse_csv_content(
                 content,
@@ -205,8 +211,17 @@ def csv_import(request):
             status=422,
         )
 
+    for file in parsed_files:
+        sheet_title = file["employee"]
+        response = GoogleSheetsHelper.create_sheet_if_not_exists(sheets_service, spreadsheet, spreadsheet_id, sheet_title)
+        if response is not None:
+            print("response: ", response)
+        
+        GoogleSheetsHelper.setup_sheet_header(
+            sheets_service, spreadsheet_id, 
+            sheet_title, GoogleSheetsHelper.HEADERS["employee_headers"]
+        )
     
-
     
     return JsonResponse(
         {
@@ -216,7 +231,7 @@ def csv_import(request):
                 "id": spreadsheet["spreadsheetId"],
                 "name": spreadsheet.get("properties", {}).get("title"),
             },
-            "files": parsed_files,
+            "parsed_files": parsed_files,
         },
         status=200,
     )
@@ -343,7 +358,6 @@ def setup(request):
         {"configuration": configuration},
     )
 
-
 @login_required
 @require_POST
 def save_setup(request):
@@ -397,10 +411,7 @@ def save_setup(request):
     configuration.spreadsheet_id = spreadsheet_id
     configuration.save()
     
-    has_employee_sheet = any(
-        sheet.get("properties", {}).get("title") == "Mitarbeiterdaten"
-        for sheet in spreadsheet.get("sheets", [])
-    )
+    has_employee_sheet = GoogleSheetsHelper.has_sheet(spreadsheet, "Mitarbeiterdaten")
 
     if not has_employee_sheet:
         return JsonResponse(
@@ -424,3 +435,4 @@ def save_setup(request):
         },
         status=200,
     )
+
