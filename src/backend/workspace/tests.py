@@ -7,7 +7,7 @@ from django.conf import settings
 from django.test import SimpleTestCase
 
 # Local modules
-from .google_resources import GoogleResources
+from .google_resources import CsvParser, GoogleResources
 
 class ParseResourceIdTests(SimpleTestCase):
        def test_plain_folder_id(self):
@@ -50,6 +50,49 @@ class ParseResourceIdTests(SimpleTestCase):
            '''
            with self.assertRaises(ValueError):
                GoogleResources.parse_resource_id("https://example.com/file123", "folder")
+
+class CsvParserTests(SimpleTestCase):
+    def test_minimum_break_is_added_after_six_hours(self):
+        result = CsvParser._handle_entries(
+            {
+                "04.06.2026": [
+                    {"start": "06:39", "end": "10:37", "remark": "19=Pause"},
+                    {"start": "11:04", "end": "15:13", "remark": "18=Dienstschluß"},
+                ]
+            }
+        )["04.06.2026"]
+
+        self.assertEqual(result["pause_minutes"], 30)
+        self.assertEqual(result["pause_start"], "12:39")
+        self.assertEqual(result["pause_end"], "13:09")
+        self.assertEqual(result["shift_end"], "15:16")
+        self.assertEqual(result["shift_total_time"], 8.12)
+        self.assertEqual(result["warnings"], "P6")
+
+    def test_zero_duration_pause_marker_is_not_work_time(self):
+        result = CsvParser._handle_entries(
+            {
+                "10.06.2026": [
+                    {"start": "08:29", "end": "12:37", "remark": "18=Dienstschluß"},
+                    {"start": "12:37", "end": "12:37", "remark": "19=Pause"},
+                    {"start": "13:09", "end": "16:32", "remark": "18=Dienstschluß"},
+                ]
+            }
+        )["10.06.2026"]
+
+        self.assertEqual(result["pause_minutes"], 32)
+        self.assertEqual(result["shift_start"], "08:29")
+        self.assertEqual(result["shift_end"], "16:32")
+        self.assertEqual(result["shift_total_time"], 7.52)
+        self.assertEqual(result["warnings"], "")
+
+    def test_missing_date_is_a_free_day(self):
+        result = CsvParser._handle_entries({"01.06.2026": []})["01.06.2026"]
+
+        self.assertEqual(result["type_of_day"], "Frei")
+        self.assertEqual(result["shift_total_time"], 0)
+        self.assertEqual(result["warnings"], "")
+
 
 class BuildGoogleResourcesTests(SimpleTestCase):
     def test_builds_drive_and_sheets_services(self):

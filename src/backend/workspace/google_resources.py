@@ -7,6 +7,7 @@ from datetime import date, datetime
 from urllib.parse import parse_qs, urlparse
 from typing import ClassVar
 from cryptography.fernet import Fernet
+import itertools
 
 # Django modules
 from django.conf import settings
@@ -343,73 +344,115 @@ class CsvParser:
     @staticmethod
     def _handle_entries(entries: dict[str, list[dict]]):
         resulted_entries = {}
-        
-        for working_date, shifts in entries.items():
-            shift_start = ""
-            pause_start = ""
-            pause_end = ""
-            shift_end = ""
-            pause_minutes = 0
-            shift_total_time = 0.0
-            type_of_day = "Frei"
 
-            if len(shifts) == 1 and shifts[0]["remark"] == "19=Pause":
-                shift_start = shifts[0]["start"]
-                shift_end = shifts[0]["end"]
-                shift_total_time = shifts[0]["shift_duration"]
-                type_of_day = "Arbeit"
-                
+        for working_date, shifts in entries.items():
+            if not shifts:
                 resulted_entries[working_date] = {
-                    "shift_start": shift_start,
-                    "pause_start": pause_start,
-                    "pause_end": pause_end,
-                    "shift_end": shift_end,
-                    "shift_total_time": round(shift_total_time, 2),
-                    "pause_minutes": pause_minutes,
-                    "type_of_day": type_of_day,
+                    "shift_start": "",
+                    "pause_start": "",
+                    "pause_end": "",
+                    "shift_end": "",
+                    "shift_total_time": 0,
+                    "pause_minutes": 0,
+                    "type_of_day": "Frei",
+                    "warnings": "",
                 }
                 continue
 
-            previous_shift_end = ""
+            shifts = sorted(
+                shifts,
+                key=lambda shift: CsvParser._time_to_minutes(shift["start"]),
+            )
+
+            shift_start = shifts[0]["start"]
+            shift_end = shifts[-1]["end"]
+            shift_start_minutes = CsvParser._time_to_minutes(shift_start)
+            shift_end_minutes = CsvParser._time_to_minutes(shift_end)
+            shift_gross_minutes = shift_end_minutes - shift_start_minutes
             
-            for shift_counter, shift in enumerate(shifts):
-                shift_duration = shift["shift_duration"]
-                shift_total_time += shift_duration
-                
-                if shift_counter == 0:
-                    if shift["start"] != "":
-                        type_of_day = "Arbeit"
-                        
-                    shift_start = shift["start"]
-                    
-                if shift["remark"] == "19=Pause":
-                    pause_start = shift["end"]
-                elif shift["remark"] == "18=Dienstschluß" or shift["remark"] is None:
-                    pause_end = shift["start"]
-                    shift_end = shift["end"]
-                    
+            pause_windows = []
+            warnings = []
 
-                if previous_shift_end:
-                    previous_shift_end_time = datetime.strptime(previous_shift_end, "%H:%M")
-                    new_shift_start_time = datetime.strptime(shift["start"], "%H:%M")
-                    print(f"previous shift end time: {previous_shift_end_time}, new shift start time: {new_shift_start_time}")
-                    pause_duration = (new_shift_start_time - previous_shift_end_time).total_seconds() / 60
-                    pause_minutes += pause_duration
+            for current, following in itertools.pairwise(shifts):
+                current_end = CsvParser._time_to_minutes(current["end"])
+                following_start = CsvParser._time_to_minutes(following["start"])
+                pause_gap = following_start - current_end
 
-                previous_shift_end = shift["end"]
+                if pause_gap < 0:
+                    warnings.append("ÜBERLAPPUNG")
+                elif 5 <= pause_gap <= 180:
+                    pause_windows.append(
+                        {
+                            "start": current["end"],
+                            "end": following["start"],
+                            "minutes": pause_gap,
+                        }
+                    )
+                elif pause_gap > 180:
+                    warnings.append("LÜCKE")
 
-            
+            pause_minutes = sum(
+                pause["minutes"] for pause in pause_windows
+            )
+            pause_start = pause_windows[0]["start"] if pause_windows else ""
+            pause_end = pause_windows[0]["end"] if pause_windows else ""
+            working_minutes = max(shift_gross_minutes - pause_minutes, 0) # Avoid negative working minutes
+
+            if len(pause_windows) >= 3:
+                warnings.append("P3")
+
+            # Days longer than six hours need at least 30 minutes of pause,
+            # and the first pause must begin within the first six hours.
+            first_pause_start = (
+                CsvParser._time_to_minutes(pause_start)
+                if pause_start
+                else None
+            )
+            requires_break_correction = (
+                shift_gross_minutes > 360
+                and (
+                    pause_minutes < 30
+                    or first_pause_start is None
+                    or first_pause_start - shift_start_minutes > 360
+                )
+            )
+
+            if requires_break_correction:
+                pause_minutes = max(pause_minutes, 30)
+                pause_start_minutes = shift_start_minutes + 360
+                pause_end_minutes = pause_start_minutes + 30
+                pause_start = CsvParser._minutes_to_time(pause_start_minutes)
+                pause_end = CsvParser._minutes_to_time(pause_end_minutes)
+
+                # Preserve the calculated working time while moving the end
+                # time when a synthetic pause is inserted.
+                shift_end = CsvParser._minutes_to_time(
+                    shift_start_minutes + working_minutes + pause_minutes
+                )
+                warnings.append("P6")
+
             resulted_entries[working_date] = {
                 "shift_start": shift_start,
                 "pause_start": pause_start,
                 "pause_end": pause_end,
                 "shift_end": shift_end,
-                "shift_total_time": round(shift_total_time, 2),
+                "shift_total_time": round(working_minutes / 60, 2),
                 "pause_minutes": pause_minutes,
-                "type_of_day": type_of_day,
+                "type_of_day": "Arbeit",
+                "warnings": ", ".join(dict.fromkeys(warnings)),
             }
 
         return resulted_entries
+
+    @staticmethod
+    def _time_to_minutes(value: str) -> int:
+        parsed_time = datetime.strptime(value, "%H:%M")
+        return parsed_time.hour * 60 + parsed_time.minute
+
+    @staticmethod
+    def _minutes_to_time(value: int) -> str:
+        hours, minutes = divmod(value, 60)
+        return f"{hours:02d}:{minutes:02d}"
 
 class GoogleSheetsHelper:
     HEADERS: ClassVar[dict[str, list[str]]] = {
