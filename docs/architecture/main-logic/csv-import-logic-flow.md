@@ -188,5 +188,36 @@ csv_raw_data/Schicht_Ademir_Juni_2026.csv
 }
 ```
 
-Type of the day includes:
-- Working day (at least for now)
+- Type of the day includes:
+  - Working day (at least for now)
+
+After we have the `resulted_results`, I want to fill up the missing dates based on the expected month, and expected year (for February) so that the sheet has a more consistent look
+
+
+## Handling gaps, overlaps, and working-time calculation
+
+### CSV intervals must be sorted by start time before they are processed. For each pair of consecutive intervals, calculate the gap between the current interval's end and the next interval's start.
+
+- A negative gap indicates an overlap. Add an `ÜBERLAPPUNG` warning and do not count the overlap as a pause.
+- A zero-minute gap is not a pause.
+- A gap from 5 through 180 minutes is a pause and should be included in the total pause duration.
+- A gap greater than 180 minutes should add a `LÜCKE` warning and should not automatically be counted as a pause.
+- A zero-duration row marked `19=Pause` is a pause marker, not a working interval. Use its timestamp as the pause start and the next interval's start as the pause end.
+
+The service start must always be the first interval's start, and the service end must always be the last interval's end, regardless of which remark appears on those rows.
+
+### Working time should be calculated using integer minutes rather than summing rounded per-interval durations:
+
+```text
+gross_minutes = last_interval_end - first_interval_start
+working_minutes = gross_minutes - accepted_pause_minutes
+working_hours = round(working_minutes / 60, 2)
+```
+
+For example, Ademir on `10.06.2026` has intervals from `08:29` to `16:32` and a pause from `12:37` to `13:09`:
+
+```text
+483 gross minutes - 32 pause minutes = 451 working minutes = 7.52 hours
+```
+
+This avoids floating-point and rounding errors caused by summing individual CSV row durations.

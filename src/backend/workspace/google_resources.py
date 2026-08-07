@@ -1,17 +1,21 @@
-from cmath import e
+# Built-in modules
 import csv
 import io
 import re
+import calendar
 from datetime import date, datetime
 from urllib.parse import parse_qs, urlparse
-
+from typing import ClassVar
 from cryptography.fernet import Fernet
+
+# Django modules
 from django.conf import settings
+
+# Google modules
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
-from typing import ClassVar
 
 class GoogleResources:
     DRIVE_FOLDER_URL_REGEX_PATTERN: ClassVar[re.Pattern] = re.compile(r"/folders/([^/?#]+)")
@@ -226,20 +230,47 @@ class GoogleResources:
 class CsvParser:
     @staticmethod
     def parse_csv_content(content, file_name, expected_month, expected_year):
-        try:
-            text = content.decode("utf-8-sig")
-        except UnicodeDecodeError:
-            text = content.decode("cp1252")
-
         filename_match = re.fullmatch(GoogleResources.CSV_FILENAME_URL_REGEX_PATTERN, file_name)
         if not filename_match:
             raise ValueError("The CSV filename does not follow the required convention.")
 
+        employee_name = filename_match.group("employee_name")
+
+        text = content.decode("windows-1252")
+        
         entries = {}
-        reader = csv.reader(io.StringIO(text), delimiter=";")
-        for line_number, row in enumerate(reader, start=1):
-            cells = [str(cell or "").strip() for cell in row]
-            
+        normalized_data = []
+
+        days_in_month = calendar.monthrange(expected_year, expected_month)[1]
+        for day in range(1, days_in_month + 1):
+            date_str = f"{day:02d}.{expected_month:02d}.{expected_year}"
+            entries[date_str] = []
+        
+        csv_reader = csv.reader(io.StringIO(text), delimiter=";")
+        for row in csv_reader:
+            cells = [
+                str(cell or "").strip() for cell in row
+                if cell != ""
+            ]
+
+            if not cells:
+                continue
+
+            normalized_data.append(cells)
+
+        employee_name_including_row = normalized_data[2]
+        file_extracted_employee_name = employee_name_including_row[0]
+        if file_extracted_employee_name != employee_name:
+            raise ValueError(
+                f"CSV filename says: {employee_name}, but the file extracted name is {file_extracted_employee_name}. "
+                f"Please inspect this file again."
+            )
+
+        # Delete the first 4 rows and the last 3 rows which contain unnecessary data
+        del normalized_data[0:4]
+        del normalized_data[-3:]
+        
+        for line_number, cells in enumerate(normalized_data, start=1):
             date_value = next(
                 (
                     cell for cell in cells
@@ -257,7 +288,10 @@ class CsvParser:
                 or parsed_date.year != expected_year
             ):
                 raise ValueError(
-                    f"Line {line_number} contains a date ({parsed_date}) outside the target month."
+                    f'''
+                    Line {line_number} contains a date ({parsed_date}) outside the target month.
+                    Line content: {cells}
+                    '''
                 )
 
                 
@@ -266,8 +300,13 @@ class CsvParser:
                 if re.fullmatch(r"\d{2}:\d{2}", cell)
             ]
 
-            if len(times) < 2:
-                continue
+            if len(times) != 2:
+                raise ValueError(
+                    f'''
+                    Line {line_number} does not contain exactly two time cells: {times}
+                    Line content: {cells}
+                    '''
+                )
 
             shift_start = datetime.strptime(times[0], "%H:%M")
             shift_end = datetime.strptime(times[1], "%H:%M")
@@ -281,9 +320,6 @@ class CsvParser:
                 None,
             )
             
-            shifts = entries.get(date_value, None)
-            if shifts is None:
-                entries[date_value] = []
             entries[date_value].append(
                 {
                     "start": times[0],
@@ -293,14 +329,13 @@ class CsvParser:
                 }
             )
             
-
         if not entries:
             raise ValueError("The CSV contains no importable work entries.")
 
         entries = CsvParser._handle_entries(entries)
         
         return {
-            "employee": filename_match.group("employee_name"),
+            "employee": employee_name,
             "file_name": file_name,
             "entries": entries,
         }
@@ -316,19 +351,20 @@ class CsvParser:
             shift_end = ""
             pause_minutes = 0
             shift_total_time = 0.0
-            type_of_day = "Arbeit"
+            type_of_day = "Frei"
 
             if len(shifts) == 1 and shifts[0]["remark"] == "19=Pause":
                 shift_start = shifts[0]["start"]
                 shift_end = shifts[0]["end"]
                 shift_total_time = shifts[0]["shift_duration"]
-
+                type_of_day = "Arbeit"
+                
                 resulted_entries[working_date] = {
                     "shift_start": shift_start,
                     "pause_start": pause_start,
                     "pause_end": pause_end,
                     "shift_end": shift_end,
-                    "shift_total_time": shift_total_time,
+                    "shift_total_time": round(shift_total_time, 2),
                     "pause_minutes": pause_minutes,
                     "type_of_day": type_of_day,
                 }
@@ -340,10 +376,13 @@ class CsvParser:
                 shift_duration = shift["shift_duration"]
                 shift_total_time += shift_duration
                 
-                if shift["remark"] == "19=Pause":
-                    if shift_counter == 0:
-                        shift_start = shift["start"]
+                if shift_counter == 0:
+                    if shift["start"] != "":
+                        type_of_day = "Arbeit"
                         
+                    shift_start = shift["start"]
+                    
+                if shift["remark"] == "19=Pause":
                     pause_start = shift["end"]
                 elif shift["remark"] == "18=Dienstschluß" or shift["remark"] is None:
                     pause_end = shift["start"]
@@ -358,13 +397,14 @@ class CsvParser:
                     pause_minutes += pause_duration
 
                 previous_shift_end = shift["end"]
-                
+
+            
             resulted_entries[working_date] = {
                 "shift_start": shift_start,
                 "pause_start": pause_start,
                 "pause_end": pause_end,
                 "shift_end": shift_end,
-                "shift_total_time": shift_total_time,
+                "shift_total_time": round(shift_total_time, 2),
                 "pause_minutes": pause_minutes,
                 "type_of_day": type_of_day,
             }
@@ -468,11 +508,26 @@ class GoogleSheetsHelper:
     
 
 if __name__ == "__main__":
-    test_file_path = "/home/minhun/dev/parks/parks-employee-management-system-web-app/csv_raw_data/Schicht_Ademir_Juni_2026.csv"
+    test_file_path = "/home/minhun/dev/parks/parks-employee-management-system-web-app/csv_raw_data/Schicht_Angelina_Juni_2026.csv"
     with open(test_file_path, newline="", encoding="cp1252") as f:
         reader = csv.reader(f, delimiter=";")
 
+        normalized_data = []
+        
         for line_number, row in enumerate(reader, start=1):
             # print(f"Line {line_number}: {row}")
-            cells = [str(cell or "").strip() for cell in row]
-            print(cells)
+            cells = [
+                str(cell or "").strip() for cell in row
+                if cell != ""
+            ]
+
+            if not cells:
+                continue
+
+            normalized_data.append(cells)
+
+        del normalized_data[0:4]
+        del normalized_data[-3:]
+        
+        for row in normalized_data:
+            print(row)
