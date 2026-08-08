@@ -597,7 +597,7 @@ class GoogleSheetsHelper:
         return date_sort_value, time_sort_value
 
     @staticmethod
-    def replace_employee_entries(sheets_service, spreadsheet_id, sheet_title, entries,):
+    def replace_employee_entries(sheets_service, spreadsheet, spreadsheet_id, sheet_title, entries,):
         existing_rows = GoogleSheetsHelper.read_sheet_values(
             sheets_service,
             spreadsheet_id,
@@ -613,6 +613,13 @@ class GoogleSheetsHelper:
         rows = unaffected_rows + imported_rows
         rows.sort(key=GoogleSheetsHelper._row_sort_key)
 
+
+        sunday_row_indices = [
+            row_index for row_index, row in enumerate(rows, start=1)
+            if datetime.strptime(row[0], "%d.%m.%Y").weekday() == calendar.SUNDAY
+        ]
+        print(sunday_row_indices)
+        
         # Clear values only: formatting and columns after I remain untouched.
         sheets_service.spreadsheets().values().clear(
             spreadsheetId=spreadsheet_id,
@@ -628,6 +635,15 @@ class GoogleSheetsHelper:
                 body={"values": rows},
             ).execute()
 
+        GoogleSheetsHelper._create_week_borders(
+            sheets_service,
+            spreadsheet,
+            spreadsheet_id,
+            sheet_title,
+            sunday_row_indices,
+            max(len(existing_rows), len(rows)),
+        )
+
         return len(imported_rows)
 
     @staticmethod
@@ -642,6 +658,62 @@ class GoogleSheetsHelper:
             body={"name": archived_name},
             fields="id,name",
         ).execute()
+
+    @staticmethod
+    def _create_week_borders(
+        sheets_service,
+        spreadsheet,
+        spreadsheet_id,
+        sheet_title,
+        sunday_row_indices,
+        data_row_count,
+    ):
+        current_sheet = GoogleSheetsHelper.get_sheet(spreadsheet, sheet_title)
+        if not current_sheet:
+            return
+
+        sheet_id = current_sheet["properties"]["sheetId"]
+        requests = []
+
+        # Remove borders previously created by this method. Values are cleared
+        # during imports without clearing formatting, so Sunday rows can move.
+        for row_index in range(1, data_row_count + 1):
+            requests.append(
+                {
+                    "updateBorders": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "startRowIndex": row_index,
+                            "endRowIndex": row_index + 1,
+                            "startColumnIndex": 0,
+                            "endColumnIndex": 9,
+                        },
+                        "bottom": {"style": "NONE"},
+                    }
+                }
+            )
+
+        for sunday_row_index in sunday_row_indices:
+            requests.append(
+                {
+                    "updateBorders": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "startRowIndex": sunday_row_index,
+                            "endRowIndex": sunday_row_index + 1,
+                            "startColumnIndex": 0,
+                            "endColumnIndex": 9,
+                        },
+                        "bottom": {"style": "SOLID"},
+                    }
+                }
+            )
+
+        if requests:
+            sheets_service.spreadsheets().batchUpdate(
+                spreadsheetId=spreadsheet_id,
+                body={"requests": requests},
+            ).execute()
 
 if __name__ == "__main__":
     test_file_path = "/home/minhun/dev/parks/parks-employee-management-system-web-app/csv_raw_data/Schicht_Angelina_Juni_2026.csv"

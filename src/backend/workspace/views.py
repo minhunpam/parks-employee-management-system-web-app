@@ -232,6 +232,7 @@ def csv_import(request):
             )
             imported_rows += GoogleSheetsHelper.replace_employee_entries(
                 sheets_service,
+                spreadsheet,
                 spreadsheet_id,
                 sheet_title,
                 file["entries"],
