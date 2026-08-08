@@ -134,7 +134,7 @@ csv_raw_data/Schicht_Ademir_Juni_2026.csv
   - Remove the first 4 rows adn the last 3 rows which contain unnecessary data
 - Check whether the name stored in the CSV file matches the CSV filename
 
-- Read row by row and fetch data values from cell
+- Read row by row and fetch data values from the normalized data
   - Working date:
     - Check for format matching
     - Check whether the data value's month and year match the expected month and year. Otherwise, the csv file's data is corrupted
@@ -148,6 +148,27 @@ csv_raw_data/Schicht_Ademir_Juni_2026.csv
       1. "18=Dienstschluß"
       2. "19=Pause"
       3. `null`
+
+- [Handle `entries` dictionary](#handle-entries-dictionary)
+- For every file in the parsed files:
+  - Create sheet if not exists
+  - Set up sheet headers for each shet if not exists
+    - Headers: 
+    ```
+    "Datum", "Dienstbegin", "Pausenbeginn", 
+    "Pausenende", "Dienstschluss", "Pause Min", 
+    "Arbeitszeit", "Typ", "Warnung"
+    ```
+  - Sheet row replacement:
+    - Fetch the existing rows
+    - Fetch the affected dates
+    - Determine the unaffected rows
+    - Final rows = unaffected rows + affected rows
+    - Sort rows
+    - Clear values in all cells in the range of `A2:I`
+    - Update values of each sheet
+
+  - Archive files by adding suffix `ARCHIVED` to the file name
 
 ### Handle `entries` dictionary
 - Before this handling starts, the `entries` dictionary has form:

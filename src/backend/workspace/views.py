@@ -182,7 +182,7 @@ def csv_import(request):
             parsed_file = CsvParser.parse_csv_content(
                 content,
                 file["name"],
-                expected_month=6, #For testing only
+                expected_month=6,
                 expected_year=int(year),
             )
             parsed_files.append(
@@ -200,7 +200,7 @@ def csv_import(request):
                     "file": file["name"], 
                     "error": str(error),
                 },
-            )
+            ) 
 
     if errors:
         return JsonResponse(
@@ -212,27 +212,86 @@ def csv_import(request):
             status=422,
         )
 
-    for file in parsed_files:
-        sheet_title = file["employee"]
-        response = GoogleSheetsHelper.create_sheet_if_not_exists(sheets_service, spreadsheet, spreadsheet_id, sheet_title)
-        if response is not None:
-            print("response: ", response)
-        
-        GoogleSheetsHelper.setup_sheet_header(
-            sheets_service, spreadsheet_id, 
-            sheet_title, GoogleSheetsHelper.HEADERS["employee_headers"]
+    imported_files = []
+    imported_rows = 0
+
+    try:
+        for file in parsed_files:
+            sheet_title = file["employee"]
+            GoogleSheetsHelper.create_sheet_if_not_exists(
+                sheets_service,
+                spreadsheet,
+                spreadsheet_id,
+                sheet_title,
+            )
+            GoogleSheetsHelper.setup_sheet_headers_if_not_exists(
+                sheets_service,
+                spreadsheet_id,
+                sheet_title,
+                GoogleSheetsHelper.HEADERS["employee_headers"],
+            )
+            imported_rows += GoogleSheetsHelper.replace_employee_entries(
+                sheets_service,
+                spreadsheet_id,
+                sheet_title,
+                file["entries"],
+            )
+            imported_files.append(file)
+    except HttpError as error:
+        return JsonResponse(
+            {
+                "status": "spreadsheet_update_failed",
+                "message": "The CSV data could not be written to the spreadsheet.",
+                "error": str(error),
+            },
+            status=502,
         )
-    
-    
+
+    archive_errors = []
+    archived_files = []
+    for file in imported_files:
+        try:
+            archived = GoogleSheetsHelper.archive_file(drive_service, file["id"], file["name"],)
+            archived_files.append(archived.get("name", ""))
+        except HttpError as error:
+            archive_errors.append(
+                {
+                    "file": file["name"],
+                    "error": str(error),
+                }
+            )
+
+    if archive_errors:
+        return JsonResponse(
+            {
+                "status": "imported_archive_failed",
+                "message": (
+                    "The spreadsheet was updated, but some CSV files could not be archived."
+                ),
+                "imported_rows": imported_rows,
+                "archive_errors": archive_errors,
+            },
+            status=502,
+        )
+
     return JsonResponse(
         {
-            "status": "parsed",
-            "message": "All CSV files were downloaded and parsed successfully.",
+            "status": "imported",
+            "message": "CSV data was imported and the files were archived.",
+            "imported_rows": imported_rows,
+            "archived_files": archived_files,
             "spreadsheet": {
                 "id": spreadsheet["spreadsheetId"],
                 "name": spreadsheet.get("properties", {}).get("title"),
             },
-            "parsed_files": parsed_files,
+            "parsed_files": [
+                {
+                    "name": file["name"],
+                    "employee": file["employee"],
+                    "entry_count": file["entry_count"],
+                }
+                for file in parsed_files
+            ],
         },
         status=200,
     )

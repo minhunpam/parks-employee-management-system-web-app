@@ -484,9 +484,7 @@ class GoogleSheetsHelper:
         return GoogleSheetsHelper.get_sheet(spreadsheet, sheet_title) is not None
 
     @staticmethod
-    def create_sheet_if_not_exists(
-        sheets_service, spreadsheet, spreadsheet_id, sheet_title
-    ):
+    def create_sheet_if_not_exists(sheets_service, spreadsheet, spreadsheet_id, sheet_title):
         existing_sheet = GoogleSheetsHelper.get_sheet(spreadsheet, sheet_title)
         if existing_sheet is not None:
             sheet_id = existing_sheet["properties"]["sheetId"]
@@ -530,8 +528,14 @@ class GoogleSheetsHelper:
         ).execute()
 
     @staticmethod
-    def setup_sheet_header(sheets_service, spreadsheet_id, sheet_title, headers):
-        sheets_service.spreadsheets().values().update(
+    def setup_sheet_headers_if_not_exists(sheets_service, spreadsheet_id, sheet_title, headers):
+        response = sheets_service.spreadsheets().values().get(
+            spreadsheetId=spreadsheet_id,
+            range=f"'{sheet_title}'!A1:I1",
+        ).execute()
+
+        if not response.get("values"):
+            sheets_service.spreadsheets().values().update(
                 spreadsheetId=spreadsheet_id,
                 range=f"'{sheet_title}'!A1:I1",
                 valueInputOption="RAW",
@@ -540,7 +544,104 @@ class GoogleSheetsHelper:
                 },
             ).execute()
 
-    
+    @staticmethod
+    def read_sheet_values(sheets_service, spreadsheet_id, sheet_title):
+        response = sheets_service.spreadsheets().values().get(
+            spreadsheetId=spreadsheet_id,
+            range=f"'{sheet_title}'!A2:I",
+        ).execute()
+
+        return response.get("values", [])
+
+    @staticmethod
+    def entries_to_rows(entries):
+        return [
+            [
+                working_date,
+                entry["shift_start"],
+                entry["pause_start"],
+                entry["pause_end"],
+                entry["shift_end"],
+                entry["pause_minutes"],
+                entry["shift_total_time"],
+                entry["type_of_day"],
+                entry.get("warnings", ""),
+            ]
+            for working_date, entry in entries.items()
+        ]
+
+    @staticmethod
+    def _row_sort_key(row):
+        date_value = row[0] if row else ""
+        try:
+            date_sort_value = datetime.strptime(date_value, "%d.%m.%Y")
+        except (TypeError, ValueError):
+            date_sort_value = datetime.max
+
+
+        '''
+        For the current version, sorting by date is sufficient. The time fallback is only useful if the sheet later contains multiple rows for the same date, such as separate rows for
+        multiple pauses. Since the current implementation does not yet preserve multiple pause rows
+        '''
+        time_value = ""
+        if len(row) > 1:
+            time_value = row[1]
+        if not time_value and len(row) > 2:
+            time_value = row[2]
+
+        try:
+            time_sort_value = CsvParser._time_to_minutes(time_value)
+        except (TypeError, ValueError):
+            time_sort_value = 999999
+
+        return date_sort_value, time_sort_value
+
+    @staticmethod
+    def replace_employee_entries(sheets_service, spreadsheet_id, sheet_title, entries,):
+        existing_rows = GoogleSheetsHelper.read_sheet_values(
+            sheets_service,
+            spreadsheet_id,
+            sheet_title,
+        )
+        affected_dates = set(entries.keys())
+
+        unaffected_rows = [
+            row for row in existing_rows
+            if not row or row[0] not in affected_dates
+        ]
+        imported_rows = GoogleSheetsHelper.entries_to_rows(entries)
+        rows = unaffected_rows + imported_rows
+        rows.sort(key=GoogleSheetsHelper._row_sort_key)
+
+        # Clear values only: formatting and columns after I remain untouched.
+        sheets_service.spreadsheets().values().clear(
+            spreadsheetId=spreadsheet_id,
+            range=f"'{sheet_title}'!A2:I",
+            body={},
+        ).execute()
+
+        if rows:
+            sheets_service.spreadsheets().values().update(
+                spreadsheetId=spreadsheet_id,
+                range=f"'{sheet_title}'!A2:I{len(rows) + 1}",
+                valueInputOption="RAW",
+                body={"values": rows},
+            ).execute()
+
+        return len(imported_rows)
+
+    @staticmethod
+    def archive_file(drive_service, file_id, file_name):
+        if file_name.lower().endswith(".csv"):
+            archived_name = f"{file_name[:-4]}[ARCHIVED].csv"
+        else:
+            archived_name = f"{file_name}[ARCHIVED]"
+
+        return drive_service.files().update(
+            fileId=file_id,
+            body={"name": archived_name},
+            fields="id,name",
+        ).execute()
 
 if __name__ == "__main__":
     test_file_path = "/home/minhun/dev/parks/parks-employee-management-system-web-app/csv_raw_data/Schicht_Angelina_Juni_2026.csv"
