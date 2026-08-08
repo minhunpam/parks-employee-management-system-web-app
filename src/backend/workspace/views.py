@@ -153,7 +153,8 @@ def csv_import_check(request):
 @login_required
 @require_POST
 def csv_import(request):
-    """Revalidate the current files before running the actual import."""
+
+    # Revalidate the current files before running the actual import.
     context = _validated_csv_import_context(request)
     if isinstance(context, JsonResponse):
         return context

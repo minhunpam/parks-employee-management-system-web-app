@@ -53,6 +53,16 @@ class ParseResourceIdTests(SimpleTestCase):
 
 class CsvParserTests(SimpleTestCase):
     def test_minimum_break_is_added_after_six_hours(self):
+        '''
+        06:39 - 10:37 ---> working time: 3:58
+        10:37 - 11:04 ---> pause time: 27 minutes
+        11:04 - 15:13 ---> working time: 4:09
+        06:39 - 15:13 ---> gross working time: 8:34
+
+        gross working time > 6 hours && pause time < 30 minutes ---> fulfill the condition for pause correction
+        '''
+
+        
         result = CsvParser._handle_entries(
             {
                 "04.06.2026": [

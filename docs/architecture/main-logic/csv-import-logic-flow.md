@@ -124,8 +124,16 @@ csv_raw_data/Schicht_Ademir_Juni_2026.csv
 ```
 
 ## CSV Content Parsing
-- Decode the CSV content using encoding: `windows-1252`.
 - Check if the parsed filename matches completely with the expected format.
+- Decode the CSV content using encoding: `windows-1252`.
+- Add all the **date key** into the entry. 
+  - Example: June has 30 days, so the date keys will be `01.06.2026`, `02.06.2026`, ..., `30.06.2026`.
+  - Reason: I want to maintain a consistent format among the employees. Because if taken from the CSV files, there are days one working, but other doesn't work. So on the day someone doesn't is left blank
+- Normalize the data read from the CSV file.
+  - Remove blank rows (`[]`), and blank cells (`""`)
+  - Remove the first 4 rows adn the last 3 rows which contain unnecessary data
+- Check whether the name stored in the CSV file matches the CSV filename
+
 - Read row by row and fetch data values from cell
   - Working date:
     - Check for format matching
@@ -161,6 +169,7 @@ csv_raw_data/Schicht_Ademir_Juni_2026.csv
     ...
 }
 ```
+
 - After the handling, the `entries` dictionary should have the following form:
 ```
 {
@@ -171,8 +180,9 @@ csv_raw_data/Schicht_Ademir_Juni_2026.csv
             "pause_end": "<pause_end_time>",
             "shift_end": "<shift_end_time>",
             "shift_total_time": "<shift_total_time>",
-            "pause_total_time": "<pause_total_time>",
+            "pause_minutes": "<pause_minutes>",
             "type of day": "<type_of_day>",
+            "warnings": "<warnings>",
         },
     "<working_date>": 
         {
@@ -181,43 +191,51 @@ csv_raw_data/Schicht_Ademir_Juni_2026.csv
             "pause_end": "<pause_end_time>",
             "shift_end": "<shift_end_time>",
             "shift_total_time": "<shift_total_time>",
-            "pause_total_time": "<pause_total_time>",
+            "pause_minutes": "<pause_minutes>",
             "type of day": "<type_of_day>",
+            "warnings": "<warnings>",
         },
     ...
 }
 ```
 
 - Type of the day includes:
-  - Working day (at least for now)
+  - "Frei" - off day
+  - "Arbeit" - working day
 
-After we have the `resulted_results`, I want to fill up the missing dates based on the expected month, and expected year (for February) so that the sheet has a more consistent look
+- Calculate the working time
+  - Shift gross minutes = End time of the last shift - Start time of the first shift
+  - Pause minutes = Sum of all pause gaps
+  - Working time = Shift gross minutes - Pause minutes
 
+- Things to consider with the pause gaps 
+  - **"ÜBERLAPPUNG" (Overlapping): two CSV intervals occur at the same time**
+    - Example:     
+      ```text
+        08:00–12:00
+        11:30–15:00
+      ```
+     - The second interval starts 30 minutes before the first one ends. Therefore, those 30 minutes overlap.
+     - This may indicate:
+      - duplicate or incorrect CSV records;
+      - manually entered correction data;
+      - an employee being assigned to two intervals simultaneously.
+     - It is not a pause. The gap calculation is negative:
+      ```text
+        11:30 - 12:00 = -30 minutes
+      ```
+  - **LÜCKE (Hole???): employee takes break more than 180 minutes (3 hours)**
+  - **Normal case: pause gap is between 5 minutes and 180 minutes**
+  - **If employee takes more than 3 breaks during a day, it should give a "P3" warning**
 
-## Handling gaps, overlaps, and working-time calculation
-
-### CSV intervals must be sorted by start time before they are processed. For each pair of consecutive intervals, calculate the gap between the current interval's end and the next interval's start.
-
-- A negative gap indicates an overlap. Add an `ÜBERLAPPUNG` warning and do not count the overlap as a pause.
-- A zero-minute gap is not a pause.
-- A gap from 5 through 180 minutes is a pause and should be included in the total pause duration.
-- A gap greater than 180 minutes should add a `LÜCKE` warning and should not automatically be counted as a pause.
-- A zero-duration row marked `19=Pause` is a pause marker, not a working interval. Use its timestamp as the pause start and the next interval's start as the pause end.
-
-The service start must always be the first interval's start, and the service end must always be the last interval's end, regardless of which remark appears on those rows.
-
-### Working time should be calculated using integer minutes rather than summing rounded per-interval durations:
-
-```text
-gross_minutes = last_interval_end - first_interval_start
-working_minutes = gross_minutes - accepted_pause_minutes
-working_hours = round(working_minutes / 60, 2)
-```
-
-For example, Ademir on `10.06.2026` has intervals from `08:29` to `16:32` and a pause from `12:37` to `13:09`:
-
-```text
-483 gross minutes - 32 pause minutes = 451 working minutes = 7.52 hours
-```
-
-This avoids floating-point and rounding errors caused by summing individual CSV row durations.
+- Pause correction
+  - Condition for pause correction is:
+    - Employee works more than 360 minutes (6 hours) in a single working day
+    - And:
+      - Pause minutes < 30 minutes
+      - OR The interval between the shift start and the following pause start > 6 hours
+  - Recalculate:
+    - pause start = shift start + 6 hours 
+    - pause end = pause start + 30 minutes
+    - shift end = shift start + working time + pause time
+  - Warning: `"P6"`

@@ -240,13 +240,12 @@ class CsvParser:
         text = content.decode("windows-1252")
         
         entries = {}
-        normalized_data = []
-
         days_in_month = calendar.monthrange(expected_year, expected_month)[1]
         for day in range(1, days_in_month + 1):
             date_str = f"{day:02d}.{expected_month:02d}.{expected_year}"
             entries[date_str] = []
         
+        normalized_data = []
         csv_reader = csv.reader(io.StringIO(text), delimiter=";")
         for row in csv_reader:
             cells = [
@@ -279,9 +278,6 @@ class CsvParser:
                 ),
                 None,
             )
-            
-            if not date_value:
-                continue
                 
             parsed_date = datetime.strptime(date_value, "%d.%m.%Y")
             if (
@@ -309,9 +305,6 @@ class CsvParser:
                     '''
                 )
 
-            shift_start = datetime.strptime(times[0], "%H:%M")
-            shift_end = datetime.strptime(times[1], "%H:%M")
-            shift_duration = (shift_end - shift_start).total_seconds() / 3600
 
             remark = next(
                 (
@@ -325,7 +318,6 @@ class CsvParser:
                 {
                     "start": times[0],
                     "end": times[1],
-                    "shift_duration": round(shift_duration, 2),
                     "remark": remark,
                 }
             )
@@ -352,7 +344,7 @@ class CsvParser:
                     "pause_start": "",
                     "pause_end": "",
                     "shift_end": "",
-                    "shift_total_time": 0,
+                    "shift_total_time": 0.0,
                     "pause_minutes": 0,
                     "type_of_day": "Frei",
                     "warnings": "",
