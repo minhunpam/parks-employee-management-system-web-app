@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     # Project-local Apps
     'accounts',
     'workspace',
+    'employees',
 ]
 
 MIDDLEWARE = [
