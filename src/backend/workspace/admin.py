@@ -7,7 +7,7 @@ class WorkspaceAdmin(admin.ModelAdmin):
         "owner",
         "root_folder_id",
         "spreadsheet_id",
-        "configured_at",
+        "created_at",
     )
 
     search_fields = ("owner__email", "owner__google_connection__subject", )
@@ -16,7 +16,7 @@ class WorkspaceAdmin(admin.ModelAdmin):
         "owner",
         "root_folder_id",
         "spreadsheet_id",
-        "configured_at",
+        "created_at",
     )
 
     def has_add_permission(self, request):
