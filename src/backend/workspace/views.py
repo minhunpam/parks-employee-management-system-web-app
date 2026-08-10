@@ -13,7 +13,7 @@ from django.shortcuts import redirect, render
 from django.conf import settings
 
 # Google modules
-from google.auth.exceptions import GoogleAuthError
+from google.auth.exceptions import GoogleAuthError, RefreshError
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import Flow
 from google.oauth2 import id_token
@@ -73,6 +73,14 @@ def _validated_csv_import_context(request):
         )
         import_state = GoogleResources.prepare_csv_import_folder(
             drive_service, folder["id"]
+        )
+    except RefreshError:
+        return JsonResponse(
+            {
+                "error": "Your Google connection has expired or been revoked. Please reconnect Google.",
+                "code": "google_reconnect_required",
+            },
+            status=401,
         )
     except PermissionError as error:
         return JsonResponse({"error": str(error)}, status=403)
@@ -360,20 +368,30 @@ def connect_callback(request):
     except (GoogleAuthError, ValueError) as error:
         return HttpResponseBadRequest(error)
 
+    subject = identity["sub"]
     
-    connection = request.user.google_connection
+    connection = GoogleConnection.objects.filter(
+        user=request.user
+    ).first()
 
-    if identity["sub"] != connection.subject:
-        return HttpResponseBadRequest(
-            b"Drive authorization used a different Google account."
+    if connection is None:
+        existing_connection = GoogleConnection.objects.filter(
+            subject=subject
+        ).first()
+
+        if existing_connection and existing_connection.user_id != request.user.pk:
+            return HttpResponseBadRequest(b"This Google account is connected to another user.")
+
+        connection = existing_connection or GoogleConnection.objects.create(
+            user=request.user,
+            subject=subject,
         )
+    elif connection.subject != subject:
+        return HttpResponseBadRequest(b"Drive authorization used a different Google account.")
 
-    connection.granted_scopes = list(
-        flow.credentials.scopes or []
-    )
+    connection.granted_scopes = list(flow.credentials.scopes or [])
 
     fernet = Fernet(settings.FERNET_KEY)
-    print(f"credentials refresh token: {flow.credentials.refresh_token}")
     if flow.credentials.refresh_token:
         connection.encrypted_refresh_token = fernet.encrypt(
             flow.credentials.refresh_token.encode()
@@ -449,6 +467,8 @@ def save_setup(request):
         )
 
     connection = request.user.google_connection
+    if not connection:
+        return redirect("workspace:connect")
     
     response = Validator.validate_folder_and_spreadsheet_ids(connection, root_folder_id, spreadsheet_id)
     response_data = json.loads(response.content)
@@ -471,18 +491,6 @@ def save_setup(request):
     configuration.root_folder_id = root_folder_id
     configuration.spreadsheet_id = spreadsheet_id
     configuration.save()
-    
-    has_employee_sheet = GoogleSheetsHelper.has_sheet(spreadsheet, "Mitarbeiterdaten")
-
-    if not has_employee_sheet:
-        return JsonResponse(
-            {
-                "status": "not_configured",
-                "workspace_status": "needs_attention",
-                "error": "The Mitarbeiterdaten sheet is missing.",
-            },
-            status=422,
-        )
     
     return JsonResponse(
         {

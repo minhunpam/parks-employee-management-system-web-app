@@ -29,6 +29,7 @@
             id="setup-page"
             data-save-url="{% url 'workspace:setup-save' %}"
             data-successful-redirect-url="{% url 'workspace:entry' %}"
+            data-connect-url="{% url 'workspace:connect' %}"
         ></div>
 
         <form id="setup-form">
@@ -55,6 +56,7 @@
             </p>
             <button type="submit">Save configuration</button>
             <p id="setup-status" role="status"></p>
+            <a id="reconnect-google" hidden>Reconnect Google</a>
         </form>
     </main>
 </body>

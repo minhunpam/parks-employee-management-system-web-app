@@ -3,10 +3,12 @@ import { csrfToken } from "./common.js";
 const entryPage = document.querySelector("#entry-page");
 const csvImportUrl_Check = entryPage.dataset.csvImportUrlCheck;
 const csvImportUrl_Import = entryPage.dataset.csvImportUrlImport;
+const connectUrl = entryPage.dataset.connectUrl;
 
 const importCsvButton_Check = document.querySelector("#import-csv-button-check");
 const importCsvStatus_Check = document.querySelector("#import-csv-status-check");
 const importCsvButton_Import = document.querySelector("#import-csv-button-import");
+const reconnectGoogle = document.querySelector("#reconnect-google");
 
 importCsvButton_Check.addEventListener("click", async () => {
   if (!importCsvButton_Import.hidden) {
@@ -26,7 +28,11 @@ importCsvButton_Check.addEventListener("click", async () => {
     });
     const result = await response.json();
 
-    if (result.status === "awaiting_upload") {
+    if (result.code === "google_reconnect_required" || response.status === 401) {
+      importCsvStatus_Check.textContent = result.error || "Please reconnect Google.";
+      reconnectGoogle.href = connectUrl;
+      reconnectGoogle.hidden = false;
+    } else if (result.status === "awaiting_upload") {
       importCsvStatus_Check.textContent = result.message;
     } else if (result.status === "invalid_files") {
       importCsvStatus_Check.textContent = `${result.message} Invalid files: ${result.invalid_files.join(", ")}`;
@@ -59,6 +65,14 @@ importCsvButton_Import.addEventListener("click", async () => {
 
   const result = await response.json();
   importCsvButton_Import.disabled = false;
+
+  if (result.code === "google_reconnect_required" || response.status === 401) {
+    importCsvStatus_Check.textContent = result.error || "Please reconnect Google.";
+    reconnectGoogle.href = connectUrl;
+    reconnectGoogle.hidden = false;
+    return;
+  }
+
   console.log(result);
   
 });

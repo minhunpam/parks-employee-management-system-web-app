@@ -2,6 +2,7 @@
 # Django modules
 from django.shortcuts import redirect
 from django.http import JsonResponse
+from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
 
 # Local modules
@@ -78,6 +79,14 @@ class Validator:
             )
         except PermissionError as error:
             return JsonResponse({"error": str(error)}, status=403)
+        except RefreshError:
+            return JsonResponse(
+                {
+                    "error": "Your Google connection has expired or been revoked. Please reconnect Google.",
+                    "code": "google_reconnect_required",
+                },
+                status=401,
+            )
         except ValueError as error:
             return JsonResponse({"error": str(error)}, status=400)
         except HttpError as error:

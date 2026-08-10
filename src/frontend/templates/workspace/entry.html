@@ -26,12 +26,14 @@
             id="entry-page"
             data-csv-import-url-check="{% url 'workspace:csv-import-check' %}"
             data-csv-import-url-import="{% url 'workspace:csv-import' %}"
+            data-connect-url="{% url 'workspace:connect' %}"
         ></div>
 
         {% csrf_token %}
         
         <button id="import-csv-button-check">Import CSV (CHECK)</button>
         <p id="import-csv-status-check" role="status" aria-live="polite"></p>
+        <a id="reconnect-google" hidden>Reconnect Google</a>
 
         <button id="import-csv-button-import" hidden>Import CSV (IMPORT)</button>
     </main>
