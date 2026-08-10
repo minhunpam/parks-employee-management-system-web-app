@@ -68,3 +68,8 @@
   - Calculation: `closing_vacation_balance = opening_vacation_balance - vacation_days_used`
 - `created_at` --- the date and time the employee record was created
 - `updated_at` --- the date and time the employee record was last updated
+
+## Management
+- Employee will be registered through a form from the frontend by clicking the "Register Employee" button
+- The form will have pretty much the same shape as the on from the admin site (it includes all the fields of the model `Employee`)
+- For some fields, there are a few client-side validations

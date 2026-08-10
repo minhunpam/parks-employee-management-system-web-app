@@ -1,4 +1,4 @@
-import { csrfToken } from "./common.js";
+import { csrfToken } from "../common.js";
 
 const page = document.querySelector("#setup-page");
 const saveUrl = page.dataset.saveUrl;
@@ -45,7 +45,7 @@ async function saveSetup(payload) {
 
     return {
       original_response: response,
-      result: await response.json()
+      result: await response.json(),
     };
 }
 

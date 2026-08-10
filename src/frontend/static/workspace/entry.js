@@ -1,4 +1,4 @@
-import { csrfToken } from "./common.js";
+import { csrfToken } from "../common.js";
 
 const entryPage = document.querySelector("#entry-page");
 const csvImportUrl_Check = entryPage.dataset.csvImportUrlCheck;
