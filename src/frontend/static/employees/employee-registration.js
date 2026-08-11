@@ -83,14 +83,20 @@ form.addEventListener("submit", async (event) => {
   
   try {
     result = await registerEmployee(payload);
+    if (result.original_response.status === 200) {
+      employeeRegistrationStatus.textContent = result.result.message;
+      form.reset();
+    }
+    
     const errorObj = result.result.error;
 
-    if (errorObj.email) {
+    if (errorObj && errorObj.email) {
       email.setCustomValidity(errorObj.email.join(" "));
       email.reportValidity();
     }
     
   } catch (error) {
+    console.log(error);
     employeeRegistrationStatus.textContent = "Something wrong happened and the developer has caught this!";
   }
 });

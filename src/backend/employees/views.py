@@ -9,7 +9,11 @@ from django.shortcuts import render
 from django.views.decorators.http import require_POST
 
 # Local modules
-from .models import Employee
+from .models import (
+    Employee,
+    EmployeeMonth,
+    EmployeeYear,
+)
 
 @login_required
 def employee_dashboard(request):
@@ -40,9 +44,22 @@ def register(request):
         )
         registered_employee.full_clean()
     except (ValidationError) as error:
+        print("Something wrong with the employee itself")
         return JsonResponse({"error": error.message_dict}, status=400)
+        
+    registered_employee.save()
 
-    registered_employee.save()    
+    registered_employee_month = EmployeeMonth(
+        employee=registered_employee,
+    )
+    registered_employee_month.save()
+    
+    registered_employee_year = EmployeeYear(
+        employee=registered_employee,
+    )
+    registered_employee_year.save()
+    
+
     return JsonResponse(
         {
             "message": "Employee registered successfully",

@@ -6,7 +6,7 @@ from .models import Employee, EmployeeMonth, EmployeeYear
 @admin.register(EmployeeYear)
 class EmployeeYearAdmin(admin.ModelAdmin):
     list_display = (
-        "employee",
+        "employee__email",
         "year",
         "annual_allowed_vacation_days",
         "carried_over_vacation_days",
@@ -19,7 +19,7 @@ class EmployeeYearAdmin(admin.ModelAdmin):
 @admin.register(EmployeeMonth)
 class EmployeeMonthAdmin(admin.ModelAdmin):
     list_display = (
-        "employee",
+        "employee__email",
         "year",
         "month",
         "opening_hour_account_balance",

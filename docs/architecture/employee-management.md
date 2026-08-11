@@ -49,7 +49,7 @@
       Opening balance in March: -2 hours
     ```
 - `target_working_hours` --- the number of working hours the employee is targeting for this month
-  - Calculation: `targeted_working_hours = monthly_target_hours`(173 h)`
+  - Calculation: `target_working_hours = monthly_target_hours`(173 h)`
 - `paid_absence_hours` --- the number of working hours the employee has paid for this month, even though they were not working for the following reasons:
   - Entitiled/Permitted holiday
   - Absent on sick leave
@@ -58,7 +58,7 @@
 - `credited_working_hours` --- the number of the actual working hours for the employee in this month
   - Calculation: `credited_working_hours = worked_hours + paid_absense_hours`
 - `hour_difference` --- the number of hours the employee worked this month minus their targeted working hours
-  - Calculation: `hour_difference = credited_working_hours - targeted_working_hours`
+  - Calculation: `hour_difference = credited_working_hours - target_working_hours`
 - `closing_hour_account_balance` --- the closing hour account balance for the employee in this month
   - Calculation: `closing_hour_account_balance = opening_hour_account_balance + hour_difference`
 
