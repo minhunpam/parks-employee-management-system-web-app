@@ -1,15 +1,17 @@
 import { csrfToken } from "../common.js";
 
-const employeeDashboardPage = document.querySelector("#employee-dashboard-page");
-const employeeRegistrationUrl = employeeDashboardPage.dataset.employeeRegistrationUrl;
+const employeeRegistrationPage = document.querySelector("#employee-registration-page");
+const employeeDashboardUrl = employeeRegistrationPage.dataset.employeeDashboardUrl;
+const employeeRegistrationUrl = employeeRegistrationPage.dataset.employeeRegistrationUrl;
 
-const registerEmployeeButton = document.querySelector("#register-employee-button");
-const modal = document.querySelector("#employee-registration-modal");
 const form = document.querySelector("#employee-registration-form");
-const cancelButton = document.querySelector("#cancel-registration-button");
 
+const email = document.querySelector("#email");
 const employmentStartDate = document.querySelector("#employment-start-date");
 const employmentEndDate = document.querySelector("#employment-end-date");
+
+const cancelButton = document.querySelector("#cancel-registration-button");
+const employeeRegistrationStatus = document.querySelector("#employee-registration-status");
 
 const today = new Date();
 
@@ -53,12 +55,8 @@ employmentEndDate.addEventListener("change", () => {
   employmentEndDate.reportValidity();
 });
 
-registerEmployeeButton.addEventListener("click", () => {
-  modal.showModal();
-});
-
 cancelButton.addEventListener("click", () => {
-  modal.close();
+  window.location.assign(employeeDashboardUrl);
 });
 
 async function registerEmployee(payload) {
@@ -85,12 +83,14 @@ form.addEventListener("submit", async (event) => {
   
   try {
     result = await registerEmployee(payload);
-    console.log(result.result.message);
-  } catch (error) {
-    console.log(error);
-    return;
-  }
+    const errorObj = result.result.error;
 
-  modal.close();
-  form.reset();
+    if (errorObj.email) {
+      email.setCustomValidity(errorObj.email.join(" "));
+      email.reportValidity();
+    }
+    
+  } catch (error) {
+    employeeRegistrationStatus.textContent = "Something wrong happened and the developer has caught this!";
+  }
 });

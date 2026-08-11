@@ -2,12 +2,14 @@ from django.urls import path
 
 from .views import (
     employee_dashboard,
-    register_employee,
+    employee_register,
+    register,
 )
 
 app_name = "employees"
 
 urlpatterns = [
     path("dashboard/", employee_dashboard, name="employee-dashboard",),
-    path("register-employee/", register_employee, name="register-employee",),
+    path("employee-register/", employee_register, name="employee-register",),
+    path("register/", register, name="register",),
 ]
