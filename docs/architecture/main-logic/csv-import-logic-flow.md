@@ -223,13 +223,14 @@ csv_raw_data/Schicht_Ademir_Juni_2026.csv
 - Type of the day includes:
   - "Frei" - off day
   - "Arbeit" - working day
+  - "Feiertag" - public holiday
 
 - Calculate the working time
   - Shift gross minutes = End time of the last shift - Start time of the first shift
   - Pause minutes = Sum of all pause gaps
   - Working time = Shift gross minutes - Pause minutes
 
-- Things to consider with the pause gaps 
+### Things to consider with the pause gaps 
   - **"ÜBERLAPPUNG" (Overlapping): two CSV intervals occur at the same time**
     - Example:     
       ```text
@@ -249,7 +250,7 @@ csv_raw_data/Schicht_Ademir_Juni_2026.csv
   - **Normal case: pause gap is between 5 minutes and 180 minutes**
   - **If employee takes more than 3 breaks during a day, it should give a "P3" warning**
 
-- Pause correction
+### Pause correction
   - Condition for pause correction is:
     - Employee works more than 360 minutes (6 hours) in a single working day
     - And:
@@ -260,3 +261,9 @@ csv_raw_data/Schicht_Ademir_Juni_2026.csv
     - pause end = pause start + 30 minutes
     - shift end = shift start + working time + pause time
   - Warning: `"P6"`
+
+### Public holiday
+- Type of day: `"Feiertag"`
+- Waring: `"Auto-Feiertag"`
+- If an employee works on a public holiday, the type of day and warnings will be overwritten as if it was a normal working day
+- **However, the working minutes of the employee working on that day will be doubled**

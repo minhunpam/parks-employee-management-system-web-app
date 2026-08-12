@@ -103,6 +103,28 @@ class CsvParserTests(SimpleTestCase):
         self.assertEqual(result["shift_total_time"], 0)
         self.assertEqual(result["warnings"], "")
 
+    def test_public_holiday_is_marked_as_feiertag(self):
+        result = CsvParser._handle_entries(
+            {"06.04.2026": []},
+            holiday_dates=CsvParser._public_holidays(2026),
+        )["06.04.2026"]
+
+        self.assertEqual(result["type_of_day"], "Feiertag")
+
+    def test_worked_public_holiday_keeps_shift_data(self):
+        result = CsvParser._handle_entries(
+            {
+                "06.04.2026": [
+                    {"start": "08:00", "end": "12:00", "remark": None},
+                ]
+            },
+            holiday_dates=CsvParser._public_holidays(2026),
+        )["06.04.2026"]
+
+        self.assertEqual(result["type_of_day"], "Feiertag")
+        self.assertEqual(result["shift_start"], "08:00")
+        self.assertEqual(result["shift_end"], "12:00")
+
 
 class BuildGoogleResourcesTests(SimpleTestCase):
     def test_builds_drive_and_sheets_services(self):

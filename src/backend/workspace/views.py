@@ -232,6 +232,13 @@ def csv_import(request):
                 spreadsheet_id,
                 sheet_title,
             )
+
+            # Refresh local spreadsheet dictionary
+            spreadsheet = sheets_service.spreadsheets().get(
+                spreadsheetId=spreadsheet_id,
+                fields="spreadsheetId,properties(title),sheets(properties(sheetId,title))",
+            ).execute()
+            
             GoogleSheetsHelper.setup_sheet_headers_if_not_exists(
                 sheets_service,
                 spreadsheet_id,

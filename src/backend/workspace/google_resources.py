@@ -8,6 +8,7 @@ from urllib.parse import parse_qs, urlparse
 from typing import ClassVar
 from cryptography.fernet import Fernet
 import itertools
+import holidays
 
 # Django modules
 from django.conf import settings
@@ -325,7 +326,11 @@ class CsvParser:
         if not entries:
             raise ValueError("The CSV contains no importable work entries.")
 
-        entries = CsvParser._handle_entries(entries)
+        holiday_dates = CsvParser._public_holidays(expected_year)
+        entries = CsvParser._handle_entries(
+            entries,
+            holiday_dates=holiday_dates,
+        )
         
         return {
             "employee": employee_name,
@@ -334,10 +339,28 @@ class CsvParser:
         }
 
     @staticmethod
-    def _handle_entries(entries: dict[str, list[dict]]):
+    def _public_holidays(year: int) -> set[date]:
+        """Return statutory public holidays for Graz (Styria), Austria."""
+        return set(
+            holidays.country_holidays(
+                "AT",
+                subdiv="6",  # Styria
+                years=[year],
+            ).keys()
+        )
+
+    @staticmethod
+    def _handle_entries(
+        entries: dict[str, list[dict]],
+        holiday_dates: set[date] | None = None,
+    ):
+        holiday_dates = holiday_dates or set()
         resulted_entries = {}
 
         for working_date, shifts in entries.items():
+            parsed_date = datetime.strptime(working_date, "%d.%m.%Y").date()
+            is_public_holiday = parsed_date in holiday_dates
+
             if not shifts:
                 resulted_entries[working_date] = {
                     "shift_start": "",
@@ -346,8 +369,8 @@ class CsvParser:
                     "shift_end": "",
                     "shift_total_time": 0.0,
                     "pause_minutes": 0,
-                    "type_of_day": "Frei",
-                    "warnings": "",
+                    "type_of_day": "Feiertag" if is_public_holiday else "Frei",
+                    "warnings": "Auto-Feiertag" if is_public_holiday else "",
                 }
                 continue
 
@@ -392,6 +415,8 @@ class CsvParser:
 
             if len(pause_windows) >= 3:
                 warnings.append("P3")
+            elif len(pause_windows) == 2:
+                warnings.append("P2")
 
             # Days longer than six hours need at least 30 minutes of pause,
             # and the first pause must begin within the first six hours.
@@ -423,6 +448,10 @@ class CsvParser:
                 )
                 warnings.append("P6")
 
+            
+            if is_public_holiday:
+                working_minutes *= 2
+            
             resulted_entries[working_date] = {
                 "shift_start": shift_start,
                 "pause_start": pause_start,
@@ -430,7 +459,7 @@ class CsvParser:
                 "shift_end": shift_end,
                 "shift_total_time": round(working_minutes / 60, 2),
                 "pause_minutes": pause_minutes,
-                "type_of_day": "Arbeit",
+                "type_of_day": "Feiertag" if is_public_holiday else "Arbeit",
                 "warnings": ", ".join(dict.fromkeys(warnings)),
             }
 
@@ -455,7 +484,6 @@ class GoogleSheetsHelper:
         ],
     }
 
-    
     @staticmethod
     def get_sheet(spreadsheet, sheet_title):
         '''
@@ -463,9 +491,6 @@ class GoogleSheetsHelper:
             'spreadsheetId': '13WE8Nyr7MdUzEzruudf_ZTPW2gqV8ntcP3IEGLhVMUo',
             'properties': {'title': 'test'},
             'sheets': [
-                {'properties': {'sheetId': 0, 'title': 'Sheet1'}},
-                {'properties': {'sheetId': 1166229168, 'title': 'Hung'}},
-                {'properties': {'sheetId': 154702822, 'title': 'Sheet3'}},
                 {'properties': {'sheetId': 1794777344, 'title': 'Angelina'}},
                 {'properties': {'sheetId': 661637231, 'title': 'Ademir'}}
             ]
@@ -546,6 +571,13 @@ class GoogleSheetsHelper:
 
     @staticmethod
     def read_sheet_values(sheets_service, spreadsheet_id, sheet_title):
+        '''
+        Read sheet values of `sheet_title` from `spreadsheet_id` from cell A2 to column I (horizontally) 
+        and vertically until it hits blank line
+
+        Returns:
+            - list: list of data rows
+        '''
         response = sheets_service.spreadsheets().values().get(
             spreadsheetId=spreadsheet_id,
             range=f"'{sheet_title}'!A2:I",
@@ -618,7 +650,6 @@ class GoogleSheetsHelper:
             row_index for row_index, row in enumerate(rows, start=1)
             if datetime.strptime(row[0], "%d.%m.%Y").weekday() == calendar.SUNDAY
         ]
-        print(sunday_row_indices)
         
         # Clear values only: formatting and columns after I remain untouched.
         sheets_service.spreadsheets().values().clear(
@@ -635,16 +666,100 @@ class GoogleSheetsHelper:
                 body={"values": rows},
             ).execute()
 
-        GoogleSheetsHelper._create_week_borders(
-            sheets_service,
+        data_row_count = max(len(existing_rows), len(rows))
+        print(f"date_row_count: {data_row_count}")
+        
+        requests = []
+        requests.extend(GoogleSheetsHelper._create_week_borders(
             spreadsheet,
-            spreadsheet_id,
             sheet_title,
             sunday_row_indices,
-            max(len(existing_rows), len(rows)),
-        )
-
+            data_row_count,
+        ))
+        requests.extend(GoogleSheetsHelper._format_public_holiday_rows(
+            spreadsheet,
+            sheet_title,
+            rows,
+            data_row_count,
+        ))
+        print(f"requests: {requests}")
+        
+        if requests:
+            sheets_service.spreadsheets().batchUpdate(
+                spreadsheetId=spreadsheet_id,
+                body={
+                    "requests": requests
+                },
+            ).execute()
+        
         return len(imported_rows)
+
+    @staticmethod
+    def _format_public_holiday_rows(spreadsheet, sheet_title, rows, data_row_count,):
+        """Highlight public-holiday rows with Google Sheets' light red 3."""
+        current_sheet = GoogleSheetsHelper.get_sheet(spreadsheet, sheet_title)
+        if not current_sheet or data_row_count <= 0:
+            print("2")
+            return []
+
+        sheet_id = current_sheet["properties"]["sheetId"]
+        holiday_row_indices = [
+            row_index
+            for row_index, row in enumerate(rows, start=1)
+            if len(row) > 7 and row[7] == "Feiertag"
+        ]
+
+        holiday_color = {
+            "red": 244 / 255,
+            "green": 204 / 255,
+            "blue": 204 / 255,
+        }
+        requests = [
+            {
+                "repeatCell": { # Clearing the background color of all data rows 
+                    "range": {
+                        "sheetId": sheet_id,
+                        "startRowIndex": 1,
+                        "endRowIndex": data_row_count + 1,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 9,
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "backgroundColor": {
+                                "red": 1,
+                                "green": 1,
+                                "blue": 1,
+                            }
+                        }
+                    },
+                    "fields": "userEnteredFormat.backgroundColor",
+                }
+            }
+        ]
+
+        for row_index in holiday_row_indices:
+            requests.append(
+                {
+                    "repeatCell": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "startRowIndex": row_index,
+                            "endRowIndex": row_index + 1,
+                            "startColumnIndex": 0,
+                            "endColumnIndex": 9,
+                        },
+                        "cell": {
+                            "userEnteredFormat": {
+                                "backgroundColor": holiday_color,
+                            }
+                        },
+                        "fields": "userEnteredFormat.backgroundColor",
+                    }
+                }
+            )
+
+        return requests
 
     @staticmethod
     def archive_file(drive_service, file_id, file_name):
@@ -660,20 +775,14 @@ class GoogleSheetsHelper:
         ).execute()
 
     @staticmethod
-    def _create_week_borders(
-        sheets_service,
-        spreadsheet,
-        spreadsheet_id,
-        sheet_title,
-        sunday_row_indices,
-        data_row_count,
-    ):
+    def _create_week_borders(spreadsheet, sheet_title, sunday_row_indices, data_row_count,):
         current_sheet = GoogleSheetsHelper.get_sheet(spreadsheet, sheet_title)
-        if not current_sheet:
-            return
+        requests = []
+        if not current_sheet or data_row_count <= 0:
+            print("1");
+            return requests
 
         sheet_id = current_sheet["properties"]["sheetId"]
-        requests = []
 
         # Remove borders previously created by this method. Values are cleared
         # during imports without clearing formatting, so Sunday rows can move.
@@ -709,11 +818,7 @@ class GoogleSheetsHelper:
                 }
             )
 
-        if requests:
-            sheets_service.spreadsheets().batchUpdate(
-                spreadsheetId=spreadsheet_id,
-                body={"requests": requests},
-            ).execute()
+        return requests
 
 if __name__ == "__main__":
     test_file_path = "/home/minhun/dev/parks/parks-employee-management-system-web-app/csv_raw_data/Schicht_Angelina_Juni_2026.csv"
