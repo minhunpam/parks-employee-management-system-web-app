@@ -3,41 +3,145 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Entry</title>
-    
+    <meta name="description" content="PARKS monthly employee hours workspace.">
+    <title>Workspace · PARKS</title>
+
     {% load static %}
-    <script type="module" src="{% static 'workspace/entry.js' %}"></script>
+    <script type="module" src="{% static 'scripts/workspace/entry.js' %}"></script>
+    <link rel="stylesheet" href="{% static 'css/output.css' %}">
 </head>
-<body>
-    <header>
-        <a href="{% url 'employees:employee-dashboard' %}">View Employee Dashboard</a>
+<body class="min-h-screen bg-white font-sans text-[#1a1a1a] antialiased">
+    <header class="bg-black text-white">
+        <nav class="mx-auto flex h-16 max-w-7xl items-center justify-between px-6 lg:px-8" aria-label="Main navigation">
+            <a href="{% url 'home' %}" class="text-xl font-bold tracking-[0.18em] text-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black">PARKS</a>
+            <div class="flex items-center gap-6">
+                <span class="hidden text-sm text-white/70 sm:inline">Workspace</span>
+                <a href="{% url 'employees:employee-dashboard' %}" class="text-sm font-bold text-white transition hover:text-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black">Employee dashboard <span aria-hidden="true">→</span></a>
+            </div>
+        </nav>
     </header>
+
+    <div class="border-b border-[#cccccc] bg-[#f7f7f7]">
+        <div class="mx-auto flex max-w-7xl items-center gap-3 px-6 py-3 text-xs font-bold uppercase tracking-wide text-[#757575] lg:px-8">
+            <span class="text-[#76b900]">Workspace</span><span aria-hidden="true">/</span><span>Monthly import</span>
+        </div>
+    </div>
+
     <main>
-        {% if configuration %}
-            <section aria-labelledby="saved-resources">
-                <h2 id="saved-resources">Saved resources</h2>
-                <dl>
-                    <dt>Drive root folder</dt>
-                    <dd>{{ configuration.root_folder_id|default:"Not configured" }}</dd>
-                    <dt>Main spreadsheet</dt>
-                    <dd>{{ configuration.spreadsheet_id|default:"Not configured" }}</dd>
-                </dl>
-            </section>
-        {% endif %}
+        <section class="bg-black text-white">
+            <div class="mx-auto flex max-w-7xl flex-col gap-8 px-6 py-14 lg:flex-row lg:items-end lg:justify-between lg:px-8 lg:py-20">
+                <div class="max-w-3xl">
+                    <p class="text-sm font-bold uppercase tracking-wide text-[#76b900]">Operations workspace</p>
+                    <h1 class="mt-3 text-4xl font-bold leading-tight sm:text-5xl">Keep this month moving.</h1>
+                    <p class="mt-5 max-w-2xl text-lg leading-7 text-white/70">Check the configured Import folder, then process the CSV files when they are ready.</p>
+                </div>
+                <a href="{% url 'workspace:setup' %}" class="inline-flex min-h-11 items-center self-start border border-white px-5 py-3 text-sm font-bold text-white transition hover:border-[#76b900] hover:text-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black lg:self-auto">Workspace settings <span class="ml-3" aria-hidden="true">→</span></a>
+            </div>
+        </section>
 
-        <div
-            id="entry-page"
-            data-csv-import-url-check="{% url 'workspace:csv-import-check' %}"
-            data-csv-import-url-import="{% url 'workspace:csv-import' %}"
-            data-connect-url="{% url 'workspace:connect' %}"
-        ></div>
+        <section class="mx-auto grid max-w-7xl gap-8 px-6 py-14 lg:grid-cols-[1.25fr_0.75fr] lg:px-8 lg:py-16">
+            <div id="entry-page"
+                data-csv-import-url-check="{% url 'workspace:csv-import-check' %}"
+                data-csv-import-url-import="{% url 'workspace:csv-import' %}"
+                data-connect-url="{% url 'workspace:connect' %}">
+                    
+                <article class="relative border border-[#cccccc] p-6 sm:p-8">
+                    <span class="absolute -left-px -top-px h-3 w-3 bg-[#76b900]" aria-hidden="true"></span>
+                    <div class="flex flex-col gap-5 border-b border-[#cccccc] pb-6 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                            <p class="text-sm font-bold uppercase tracking-wide text-[#76b900]">Step 01</p>
+                            <h2 class="mt-2 text-2xl font-bold">Check the Import folder</h2>
+                            <p class="mt-2 max-w-xl text-sm leading-6 text-[#757575]">PARKS will look for last month’s CSV files and verify that they are ready to process.</p>
+                        </div>
+                        <span class="border border-[#cccccc] px-3 py-2 text-xs font-bold uppercase tracking-wide text-[#757575]">Ready to check</span>
+                    </div>
+                    {% csrf_token %}
+                    <div class="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center">
+                        <button id="import-csv-button-check" type="button" class="inline-flex min-h-11 items-center justify-center bg-[#76b900] px-6 py-3 text-base font-bold text-black transition hover:bg-[#5a8d00] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2">Check for CSV files <span class="ml-3" aria-hidden="true">→</span></button>
+                        <button id="import-csv-button-import" type="button" hidden class="inline-flex min-h-11 items-center justify-center border-2 border-[#76b900] px-5 py-3 text-base font-bold text-black transition hover:bg-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2">Import files <span class="ml-3" aria-hidden="true">→</span></button>
+                    </div>
+                    <p id="import-csv-status-check" class="mt-5 min-h-6 border-l-2 border-[#76b900] pl-4 text-sm font-bold" role="status" aria-live="polite"></p>
+                    <a id="reconnect-google" hidden class="mt-4 inline-block text-sm font-bold text-[#0046a4] underline hover:text-black focus:outline-none focus:ring-2 focus:ring-[#76b900]">Reconnect Google <span aria-hidden="true">→</span></a>
+                </article>
 
-        {% csrf_token %}
-        <button id="import-csv-button-check">Import CSV (CHECK)</button>
-        <p id="import-csv-status-check" role="status" aria-live="polite"></p>
-        <a id="reconnect-google" hidden>Reconnect Google</a>
+                <div class="mt-8 grid gap-6 sm:grid-cols-3">
+                    <div class="border-t-2 border-[#76b900] pt-4">
+                        <p class="text-xs font-bold uppercase tracking-wide text-[#757575]">01</p>
+                        <p class="mt-2 font-bold">Upload</p><p class="mt-1 text-sm text-[#757575]">Add CSV files to Import.</p>
+                    </div>
+                    
+                    <div class="border-t-2 border-[#cccccc] pt-4">
+                        <p class="text-xs font-bold uppercase tracking-wide text-[#757575]">02</p>
+                        <p class="mt-2 font-bold">Process</p>
+                        <p class="mt-1 text-sm text-[#757575]">Run the import check and action.</p>
+                    </div>
+                    
+                    <div class="border-t-2 border-[#cccccc] pt-4">
+                        <p class="text-xs font-bold uppercase tracking-wide text-[#757575]">03</p>
+                        <p class="mt-2 font-bold">Review</p>
+                        <p class="mt-1 text-sm text-[#757575]">Confirm spreadsheet and reports.</p>
+                    </div>
+                </div>
+            </div>
 
-        <button id="import-csv-button-import" hidden>Import CSV (IMPORT)</button>
+            <aside class="self-start border border-[#cccccc] bg-[#f7f7f7] p-6 sm:p-8" aria-labelledby="workspace-resources">
+                <span class="mb-6 block h-3 w-3 bg-[#76b900]" aria-hidden="true"></span>
+                <h2 id="workspace-resources" class="text-xl font-bold">Connected resources</h2>
+                {% if configuration %}
+                    <dl class="mt-6 divide-y divide-[#cccccc] border-y border-[#cccccc]">
+                        <div class="py-4">
+                            <dt class="text-xs font-bold uppercase tracking-wide text-[#757575]">Drive root folder</dt>
+                            <dd class="mt-2 break-all text-sm font-bold">{{ configuration.root_folder_id|default:"Not configured" }}</dd>
+
+                            {% if configuration.root_folder_id %}
+                            <a class="mt-2 inline-block text-sm text-[#0046a4] underline" id="root-folder-link"
+                                href="https://drive.google.com/drive/folders/{{ configuration.root_folder_id }}" 
+                                target="_blank" rel="noopener">Open in Drive <span aria-hidden="true">↗</span></a>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="py-4">
+                            <dt class="text-xs font-bold uppercase tracking-wide text-[#757575]">Main spreadsheet</dt>
+                            <dd class="mt-2 break-all text-sm font-bold">{{ configuration.spreadsheet_id|default:"Not configured" }}</dd>
+
+                            {% if configuration.spreadsheet_id %}
+                            <a class="mt-2 inline-block text-sm text-[#0046a4] underline" href="https://docs.google.com/spreadsheets/d/{{ configuration.spreadsheet_id }}/edit" target="_blank" rel="noopener">Open in Sheets <span aria-hidden="true">↗</span></a>
+                            {% endif %}
+                        </div>
+                    </dl>
+                {% else %}
+                    <p class="mt-5 border-y border-[#cccccc] py-5 text-sm leading-6 text-[#757575]">No resources are connected. Open workspace settings to configure Drive and Sheets.</p>
+                {% endif %}
+            </aside>
+        </section>
+
+        <section class="border-t border-[#cccccc] bg-[#f7f7f7]" aria-labelledby="notes-heading">
+            <div class="mx-auto max-w-7xl px-6 py-12 lg:px-8">
+                <div class="grid gap-8 md:grid-cols-3">
+                    <div>
+                        <p class="text-sm font-bold uppercase tracking-wide text-[#76b900]">Manager note</p>
+                        <h2 id="notes-heading" class="mt-3 text-2xl font-bold">A predictable monthly handoff.</h2>
+                    </div>
+                    
+                    <div class="border-l-2 border-[#cccccc] px-5">
+                        <p class="font-bold">Before checking</p>
+                        <p class="mt-2 text-sm leading-6 text-[#757575]">Make sure the latest CSV files are in the configured Import folder.</p>
+                    </div>
+                    
+                    <div class="border-l-2 border-[#cccccc] px-5">
+                        <p class="font-bold">After importing</p>
+                        <p class="mt-2 text-sm leading-6 text-[#757575]">Review the generated spreadsheet and report data before exporting PDFs.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
     </main>
+
+    <footer class="bg-black text-white/70">
+        <div class="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-8 text-sm sm:flex-row sm:items-center sm:justify-between lg:px-8">
+            <span class="font-bold tracking-[0.18em] text-[#76b900]">PARKS</span>
+            <span>Employee management system</span>
+        </div>
+    </footer>
 </body>
 </html>

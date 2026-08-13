@@ -5,4 +5,28 @@
 @source "../../node_modules/flowbite";
 @source "../../templates/";
 
+@keyframes folder-attention {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(118, 185, 0, 0.6);
+    }
+
+    50% {
+        opacity: 0.7;
+        transform: scale(1.05);
+        box-shadow: 0 0 0 8px rgba(118, 185, 0, 0);
+    }
+}
+
+.folder-attention {
+    animation: folder-attention 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .folder-attention {
+        animation: none;
+    }
+}
+
 @plugin "flowbite/plugin";

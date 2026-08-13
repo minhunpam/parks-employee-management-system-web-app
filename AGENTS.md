@@ -22,3 +22,5 @@
   - Import data from imported CSV files into the configured spreadsheet --- Follow `docs/architecture/main-logic/csv-import-logic-flow.md`
 - Follow `docs/architecture/employee-management.md` to understand the employee management flow
 - Follow `docs/deployement.md` to understand the deployment process
+
+- Follow `docs/DESIGN.md` to develop UI

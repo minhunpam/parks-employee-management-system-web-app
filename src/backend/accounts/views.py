@@ -21,6 +21,13 @@ from .models import GoogleConnection, User
 PENDING_APPROVAL_USER_SESSION_KEY = "pending_approval_user_id"
 
 
+def home(request):
+    if request.user.is_authenticated:
+        return redirect("workspace:entry")
+
+    return render(request, "accounts/home.html")
+
+
 def google_login(request):
     client_config = build_google_client_config(
         redirect_uri=settings.GOOGLE_OAUTH_REDIRECT_URI

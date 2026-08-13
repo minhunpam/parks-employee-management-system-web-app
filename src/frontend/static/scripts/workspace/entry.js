@@ -10,6 +10,12 @@ const importCsvStatus_Check = document.querySelector("#import-csv-status-check")
 const importCsvButton_Import = document.querySelector("#import-csv-button-import");
 const reconnectGoogle = document.querySelector("#reconnect-google");
 
+const rootFolderLink = document.querySelector("#root-folder-link");
+
+function setRootFolderAttention(isAttentionNeeded) {
+  rootFolderLink?.classList.toggle("folder-attention", isAttentionNeeded);
+}
+
 importCsvButton_Check.addEventListener("click", async () => {
   if (!importCsvButton_Import.hidden) {
     importCsvButton_Import.hidden = true;
@@ -32,14 +38,22 @@ importCsvButton_Check.addEventListener("click", async () => {
       importCsvStatus_Check.textContent = result.error || "Please reconnect Google.";
       reconnectGoogle.href = connectUrl;
       reconnectGoogle.hidden = false;
-    } else if (result.status === "awaiting_upload") {
+    }
+    else if (result.status === "awaiting_upload") {
       importCsvStatus_Check.textContent = result.message;
-    } else if (result.status === "invalid_files") {
+      setRootFolderAttention(true);
+    }
+    else if (result.status === "invalid_files") {
       importCsvStatus_Check.textContent = `${result.message} Invalid files: ${result.invalid_files.join(", ")}`;
-    } else if (result.status === "ready") {
+      setRootFolderAttention(false);
+    }
+    else if (result.status === "ready") {
       importCsvStatus_Check.textContent = `${result.files.length} CSV file(s) found in ${result.folder.name}.`;
       importCsvButton_Import.hidden = false;
-    } else {
+
+      setRootFolderAttention(false);
+    }
+    else {
       importCsvStatus_Check.textContent = result.error || "CSV import could not be prepared.";
     }
   } catch (error) {
@@ -50,7 +64,6 @@ importCsvButton_Check.addEventListener("click", async () => {
 });
 
 importCsvButton_Import.addEventListener("click", async () => {
-  console.log("Importing CSV...");
 
   importCsvButton_Check.disabled = true;
   importCsvButton_Import.disabled = true;
@@ -72,7 +85,8 @@ importCsvButton_Import.addEventListener("click", async () => {
     reconnectGoogle.hidden = false;
     return;
   }
+});
 
-  console.log(result);
-  
+rootFolderLink.addEventListener("click", () => {
+  setRootFolderAttention(false);
 });
