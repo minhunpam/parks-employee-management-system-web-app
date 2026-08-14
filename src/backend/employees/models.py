@@ -121,6 +121,15 @@ class EmployeeMonth(models.Model):
     vacation_days_used = models.PositiveIntegerField(default=0)
     closing_vacation_balance = models.PositiveIntegerField()
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["employee", "year", "month"],
+                name="unique_employee_year_month"
+            )
+        ]
+
+    
     @override
     def save(self, *args, **kwargs):
         if self._state.adding and self.employee_id:

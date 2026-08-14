@@ -50,8 +50,6 @@ The parsed IDs are saved in the backend database via `WorkspaceConfiguration`.
 2. **Main spreadsheet**:
   - spreadsheet exists
   - current Google account/app has write access
-  - spreadsheet contains a `Mitarbeiterdaten` sheet
-  - `Mitarbeiterdaten` headers match the canonical schema
 
 ### Required Drive subfolders
 - The root folder should contain these top-level folders:
@@ -91,28 +89,6 @@ Example: if the Drive folder and spreadsheet are writable but `Import` is missin
   ```
 
 - This creates all missing required folders at once.
-
-### Missing `Mitarbeiterdaten` sheet
-- If the spreadsheet does not contain `Mitarbeiterdaten`, show a button to create it.
-- When created, it should use the canonical headers below.
-
-### Header mismatch
-- If `Mitarbeiterdaten` exists but headers differ, show the differences and offer a **Fix headers** action.
-- **Fixing headers should preserve existing data by mapping/reordering columns into the canonical order. It should not blindly overwrite row 1 while leaving data under the wrong columns.**
-- Header matching should use known aliases, not fuzzy matching.
-
-## Canonical `Mitarbeiterdaten` Schema
-The canonical headers are:
-  ```txt
-  Vorname
-  E-Mail
-  Arbeitstage/Woche
-  Resturlaub Vorjahr
-  Urlaub aktuelles Jahr
-  Sollstunden Monat
-  ```
-
-This intentionally follows the current employee creation script behavior from `src/frontend/apps_scripts/mitarbeiterverwaltung.js`.
 
 ## Confirmation for Changes
 - If an existing saved Drive root folder ID or spreadsheet ID is changed, the app should:

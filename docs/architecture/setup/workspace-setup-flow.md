@@ -22,9 +22,7 @@
   - If no existing configuration is found, we will create a new one.
   - If an existing configuration is found, but the root folder it and the spreadsheet id were changed, it will raise 400 Error and ask the user for confirmation to update the configuration ---> Restart `saveSetup()`
 - Next step is [validating the resource IDs](#validating-the-resource-ids)
-- After the validation, for non-existing configuration instance, a new one will be created and saved to the database (_at least the Django admin DB for now_). The spreadsheet will be inspected to determine if it contains the `Mitarbeiterdaten` sheet.
-  - If exists, it will return a 200 response back to frontend
-  - Otherwise, it will return a 422 response back to frontend
+- After the validation, for non-existing configuration instance, a new one will be created and saved to the database (_at least the Django admin DB for now_).
 
 
 ### Parsing the resource IDs:
