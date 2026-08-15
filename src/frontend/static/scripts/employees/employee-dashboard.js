@@ -169,7 +169,7 @@ function renderTable(data) {
     : 0;
   const lastRow = Math.min(data.page * data.page_size, data.total);
 
-  docuement.querySelector("#page-summary").textContent = data.total
+  document.querySelector("#page-summary").textContent = data.total
     ? `${firstRow}–${lastRow} of ${data.total}`
     : "No records";
   document.querySelector("#previous-page").disabled = data.page <= 1;
