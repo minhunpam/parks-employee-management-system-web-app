@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Manage an employee in the PARKS employee management system.">
+    <title>{{ employee.first_name }} {{ employee.last_name }} · PARKS</title>
+
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/output.css' %}">
+    <script type="module" src="{% static 'scripts/employees/employee-details.js' %}"></script>
+</head>
+<body class="min-h-screen bg-white font-sans text-[#1a1a1a] antialiased">
+    <header class="bg-black text-white">
+        <nav class="mx-auto flex h-16 max-w-7xl items-center justify-between px-6 lg:px-8" aria-label="Main navigation">
+            <a href="{% url 'home' %}" class="text-xl font-bold tracking-[0.18em] text-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black">PARKS</a>
+            <div class="flex items-center gap-6">
+                <span class="hidden text-sm text-white/70 sm:inline">Employee management</span>
+                <a href="{% url 'employees:employee-dashboard' %}" class="text-sm font-bold text-white transition hover:text-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black">Employee dashboard <span aria-hidden="true">→</span></a>
+            </div>
+        </nav>
+    </header>
+
+    <div class="border-b border-[#cccccc] bg-[#f7f7f7]">
+        <div class="mx-auto flex max-w-7xl items-center gap-3 px-6 py-3 text-xs font-bold uppercase tracking-wide text-[#757575] lg:px-8">
+            <a href="{% url 'employees:employee-dashboard' %}" class="hover:text-black focus:outline-none focus:ring-2 focus:ring-[#76b900]">Employees</a>
+            <span aria-hidden="true">/</span>
+            <span class="text-[#76b900]">Employee details</span>
+        </div>
+    </div>
+
+    <div id="employee-details-page"
+        data-dashboard-url="{% url 'employees:employee-dashboard' %}"
+        data-details-url="{% url 'employees:employee-details' employee_id=employee.id %}">
+    </div>
+
+    <main>
+        <section class="bg-black text-white" aria-labelledby="details-heading">
+            <div class="mx-auto max-w-7xl px-6 py-14 lg:px-8 lg:py-16">
+                <p class="text-sm font-bold uppercase tracking-wide text-[#76b900]">Employee records</p>
+                <h1 id="details-heading" class="mt-3 max-w-3xl text-4xl font-bold leading-tight sm:text-5xl">Manage employee details.</h1>
+                <p class="mt-5 max-w-2xl text-lg leading-7 text-white/70">Update the employee profile and working agreement without changing historical records.</p>
+            </div>
+        </section>
+
+        <section class="mx-auto max-w-7xl px-6 py-12 lg:px-8 lg:py-16">
+            <form id="employee-details-form" class="max-w-4xl border border-[#cccccc] bg-white p-6 sm:p-8">
+                {% csrf_token %}
+                <div class="relative mb-8 border-b border-[#cccccc] pb-6">
+                    <span class="absolute -left-px -top-px h-3 w-3 bg-[#76b900]" aria-hidden="true"></span>
+                    <h2 class="pt-4 text-2xl font-bold">Employee details</h2>
+                    <p class="mt-2 text-sm leading-6 text-[#757575]">Fields marked <span aria-hidden="true">*</span> are required.</p>
+                </div>
+
+                <fieldset class="border-0 p-0">
+                    <legend class="text-lg font-bold">Personal information</legend>
+                    <div class="mt-5 grid gap-5 sm:grid-cols-2">
+                        <div>
+                            <label for="first-name" class="block text-base font-bold">First name <span class="text-[#e52020]" aria-hidden="true">*</span></label>
+                            <input id="first-name" name="first_name" type="text" value="{{ employee.first_name }}" data-original-value="{{ employee.first_name}}" autocomplete="given-name" required class="form-field mt-2 block h-11 w-full border border-[#cccccc] bg-white px-4 text-base text-black focus:border-2 focus:border-[#76b900] focus:outline-none" />
+                        </div>
+                        <div>
+                            <label for="last-name" class="block text-base font-bold">Last name <span class="text-[#e52020]" aria-hidden="true">*</span></label>
+                            <input id="last-name" name="last_name" type="text" value="{{ employee.last_name }}" data-original-value="{{ employee.last_name }}" autocomplete="family-name" required class="form-field mt-2 block h-11 w-full border border-[#cccccc] bg-white px-4 text-base text-black focus:border-2 focus:border-[#76b900] focus:outline-none" />
+                        </div>
+                        <div class="sm:col-span-2">
+                            <label for="email" class="block text-base font-bold">Email <span class="text-[#e52020]" aria-hidden="true">*</span></label>
+                            <input id="email" name="email" type="email" value="{{ employee.email }}" data-original-value="{{ employee.email }}" autocomplete="email" required class="form-field mt-2 block h-11 w-full border border-[#cccccc] bg-white px-4 text-base text-black focus:border-2 focus:border-[#76b900] focus:outline-none" />
+                        </div>
+                    </div>
+                </fieldset>
+
+                <fieldset class="mt-10 border-0 border-t border-[#cccccc] p-0 pt-8">
+                    <legend class="text-lg font-bold">Employment</legend>
+                    <div class="mt-5 grid gap-5 sm:grid-cols-2">
+                        <div class="sm:col-span-2">
+                            <label for="working-status" class="block text-base font-bold">Working status <span class="text-[#e52020]" aria-hidden="true">*</span></label>
+                            <select id="working-status" name="working_status" data-original-value="{{ employee.working_status}}" required class="form-field mt-2 block h-11 w-full border border-[#cccccc] bg-white px-4 text-base text-black focus:border-2 focus:border-[#76b900] focus:outline-none">
+                                <option value="active" {% if employee.working_status == 'active' %}selected{% endif %}>Active</option>
+                                <option value="archived" {% if employee.working_status == 'archived' %}selected{% endif %}>Archived</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="employment-start-date" class="block text-base font-bold">Employment start date <span class="text-[#e52020]" aria-hidden="true">*</span></label>
+                            <input id="employment-start-date" name="employment_start_date" type="date" value="{{ employee.employment_start_date|date:'Y-m-d' }}" data-original-value="{{ employee.employment_start_date|date:'Y-m-d' }}" required class="form-field mt-2 block h-11 w-full border border-[#cccccc] bg-white px-4 text-base text-black focus:border-2 focus:border-[#76b900] focus:outline-none" />
+                        </div>
+                        <div>
+                            <label for="employment-end-date" class="block text-base font-bold">Employment end date <span class="text-[#757575]">(optional)</span></label>
+                            <input id="employment-end-date" name="employment_end_date" type="date" value="{% if employee.employment_end_date %}{{ employee.employment_end_date|date:'Y-m-d' }}{% endif %}" data-original-value="{% if employee.employment_end_date %}{{ employee.employment_end_date|date:'Y-m-d' }}{% endif %}"class="form-field mt-2 block h-11 w-full border border-[#cccccc] bg-white px-4 text-base text-black focus:border-2 focus:border-[#76b900] focus:outline-none" />
+                        </div>
+                    </div>
+                </fieldset>
+
+                <fieldset class="mt-10 border-0 border-t border-[#cccccc] p-0 pt-8">
+                    <legend class="text-lg font-bold">Working agreement</legend>
+                    <p class="mt-2 text-sm leading-6 text-[#757575]">Changes apply to future monthly records only.</p>
+                    <div class="mt-5 grid gap-5 sm:grid-cols-2">
+                        <div>
+                            <label for="work-days-per-week" class="block text-base font-bold">Work days per week <span class="text-[#e52020]" aria-hidden="true">*</span></label>
+                            <input id="work-days-per-week" name="work_days_per_week" type="number" min="1" max="7" value="{{ employee.work_days_per_week }}" data-original-value="{{ employee.work_days_per_week }}" required class="form-field -2 block h-11 w-full border border-[#cccccc] bg-white px-4 text-base text-black focus:border-2 focus:border-[#76b900] focus:outline-none" />
+                        </div>
+                        <div>
+                            <label for="monthly-target-hours" class="block text-base font-bold">Monthly target hours <span class="text-[#e52020]" aria-hidden="true">*</span></label>
+                            <input id="monthly-target-hours" name="monthly_target_hours" type="number" min="0" step="0.01" value="{{ employee.monthly_target_hours }}" data-original-value="{{ employee.monthly_target_hours }}" required class="form-field mt-2 block h-11 w-full border border-[#cccccc] bg-white px-4 text-base text-black focus:border-2 focus:border-[#76b900] focus:outline-none" />
+                        </div>
+                    </div>
+                </fieldset>
+
+                <div class="mt-10 border-t border-[#cccccc] pt-6">
+                    <div class="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <button id="cancel-details-button" type="button" class="inline-flex min-h-11 items-center justify-center border-2 border-[#76b900] px-5 py-3 text-base font-bold text-black transition hover:bg-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2">Cancel</button>
+                        
+                        <button type="submit" id="save-changes-button" class="inline-flex min-h-11 items-center justify-center enabled:bg-[#76b900] px-6 py-3 text-base font-bold text-black disabled:cursor-not-allowed disabled:bg-[#5a8d00] transition enabled:hover:bg-[#5a8d00] enabled:focus:outline-none enabled:focus:ring-2 enabled:focus:ring-[#76b900] enabled:focus:ring-offset-2 " disabled>Save changes <span class="ml-3" aria-hidden="true">→</span></button>
+                    </div>
+                    <p id="employee-details-status" class="mt-4 min-h-6 border-l-2 border-[#76b900] pl-4 text-sm font-bold" role="status" aria-live="polite"></p>
+                </div>
+            </form>
+
+            <aside class="mt-10 max-w-4xl border border-[#e52020] bg-[#fff8f8] p-6 sm:p-8" aria-labelledby="archive-heading">
+                <p class="text-sm font-bold uppercase tracking-wide text-[#e52020]">Danger zone</p>
+                <h2 id="archive-heading" class="mt-3 text-xl font-bold">Archive this employee.</h2>
+                <p class="mt-2 max-w-2xl text-sm leading-6 text-[#757575]">Archiving sets the employment end date to today and preserves all historical records.</p>
+                <button id="archive-employee-button" type="button" class="mt-6 inline-flex min-h-11 items-center justify-center border-2 border-[#e52020] px-5 py-3 text-base font-bold text-[#650b0b] transition hover:bg-[#e52020] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#e52020] focus:ring-offset-2">Archive employee</button>
+            </aside>
+        </section>
+    </main>
+
+    <footer class="bg-black text-white/70">
+        <div class="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-8 text-sm sm:flex-row sm:items-center sm:justify-between lg:px-8">
+            <span class="font-bold tracking-[0.18em] text-[#76b900]">PARKS</span>
+            <span>Employee management system</span>
+        </div>
+    </footer>
+</body>
+</html>

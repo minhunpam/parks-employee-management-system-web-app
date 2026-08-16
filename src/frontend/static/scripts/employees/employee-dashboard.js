@@ -1,5 +1,7 @@
 const page = document.querySelector("#employee-dashboard");
 const apiUrl = page.dataset.apiUrl;
+const employeeDetailsUrl = page.dataset.employeeDetailsUrl;
+
 const state = {
   tab: "employees",
   page: 1,
@@ -7,7 +9,7 @@ const state = {
   sort: "default",
   direction: "asc"
 };
-const $ = (selector) => document.querySelector(selector);
+
 const htmlInjectionProtection = (value) =>
   String(value ?? "").replace(/[&<>'"]/g, (char) => ({
     "&": "&amp;",
@@ -31,13 +33,13 @@ const tableStatus = document.querySelector("#table-status");
 
 const tableDefinitions = {
   employees: {
-    headers: ["First name", "Last name", "Email", "Working status", "Employment start", "Employment end"],
-    fields: ["first_name", "last_name", "email", "working_status", "employment_start_date", "employment_end_date"],
-    sortable: ["first_name", "last_name", "email", "working_status", "employment_start_date", null],
+    headers: ["ID", "First name", "Last name", "Email", "Working status", "Employment start", "Employment end"],
+    fields: ["id", "first_name", "last_name", "email", "working_status", "employment_start_date", "employment_end_date"],
+    sortable: [null, "first_name", "last_name", "email", "working_status", "employment_start_date", null],
     cards: [
       ["total", "Total employees"],
       ["active", "Active employees"],
-      ["archived", "Archived employees"]
+      ["archived", "Archived employees"],
     ],
   },
   monthly: {
@@ -106,6 +108,7 @@ function renderSummaryCards(summary) {
 
 function renderTable(data) {
   const definition = tableDefinitions[state.tab];
+  
   const isEmployeesTab = state.tab === "employees";
   const hasEmployeeFilters = searchField.value || statusDropDown.value;
   const hasRows = data.rows.length > 0;
@@ -137,11 +140,22 @@ function renderTable(data) {
     </tr>
   `;
   
-  const renderCell = (row, field) => `
-    <td class="px-5 py-4">
-      ${htmlInjectionProtection(row[field])}
-    </td>
-  `;
+  const renderCell = (row, field) => {
+    if (isEmployeesTab && field === "first_name") { 
+      const employeeId = row.id;
+      
+      return `
+        <td class="px-5 py-4">
+          <a
+            class="text-sm text-[#0046a4] underline"
+            href="${employeeDetailsUrl.replace('/0', `/${employeeId}`)}">
+            ${htmlInjectionProtection(row[field])}
+          </a>
+        </td>`;
+    }
+    
+    return `<td class="px-5 py-4">${htmlInjectionProtection(row[field])}</td>`;
+  };
 
   const renderRow = (row) => `
     <tr class="border-b border-[#cccccc] last:border-0 hover:bg-[#f7f7f7]">

@@ -1,5 +1,5 @@
 import json
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from datetime import date
 
 # Django modules
@@ -7,8 +7,8 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.http import JsonResponse
-from django.shortcuts import render
-from django.views.decorators.http import require_GET, require_POST
+from django.shortcuts import get_object_or_404, render
+from django.views.decorators.http import require_GET, require_POST, require_http_methods
 
 # Local modules
 from .models import (
@@ -183,8 +183,6 @@ def register(request):
 
     try:
         payload = json.loads(request.body)
-        # print(f"payload: {payload}")
-        # print(type(payload["employment_start_date"]))
     
         registered_employee = Employee(
             first_name=payload["first_name"],
@@ -221,4 +219,53 @@ def register(request):
         status=200
     )
 
-    
+@login_required
+@require_http_methods(["GET", "PATCH"])
+def employee_details(request, employee_id):
+    employee = get_object_or_404(Employee, pk=employee_id)
+
+    if request.method == "PATCH":
+        try:
+            payload = json.loads(request.body)
+
+            if payload.get("action") == "archive":
+                employee.working_status = Employee.WorkingStatus.ARCHIVED
+                employee.employment_end_date = date.today()
+            else:
+                employee.first_name = payload["first_name"]
+                employee.last_name = payload["last_name"]
+                employee.email = payload["email"]
+                employee.working_status = payload["working_status"]
+                employee.employment_start_date = date.fromisoformat(
+                    payload["employment_start_date"]
+                )
+                employee.employment_end_date = (
+                    date.fromisoformat(payload["employment_end_date"])
+                    if payload.get("employment_end_date") else None
+                )
+                employee.work_days_per_week = int(payload["work_days_per_week"])
+                employee.monthly_target_hours = Decimal(payload["monthly_target_hours"])
+
+            employee.full_clean()
+            employee.save()
+        except (KeyError, TypeError, ValueError, InvalidOperation, ValidationError) as error:
+            if isinstance(error, ValidationError):
+                details = error.message_dict
+            else:
+                details = {"form": ["Please provide valid employee details."]}
+                
+            return JsonResponse({"error": details}, status=400)
+
+        message = (
+            "Employee archived successfully."
+            if payload.get("action") == "archive"
+            else "Employee details updated successfully."
+        )
+        
+        return JsonResponse({"message": message})
+
+    return render(
+        request,
+        "employees/employee-details.html",
+        {"employee": employee},
+    )
