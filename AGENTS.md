@@ -10,6 +10,11 @@
 - When asking user an question, provide different options and recommend yours with a simple explanation as to  why
 - If I tell you to implement something and my wording is confusing, please ask me more questions so that we are both on the same side
 
+### Writing documentation
+- When writng, keep the format clean:
+  - Don't span lines crazily
+  - Don't add a great number of blank lines
+
 ## Where knowledge now lives
 - Read the source that answers the question being asked
 - The architecture documents describe how the internal flow/ structures of the code run and operate

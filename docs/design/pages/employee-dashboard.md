@@ -122,14 +122,15 @@ Employees with records | Total vacation entitlement | Total remaining balance
 ## Employees table
 - The columns follow `EmployeeAdmin` in `src/backend/employees/admin.py`:
 ```text
-First name | Last name | Email |Working status|Employment start date | Employment end date
+First name | Last name | Email | Working status| Employment start date | Employment end date
 ```
 - The Employees table is sortable by the relevant columns and is paginated with 25 rows per page by default.
+- In this table, the first name of each employee is embedded with a link directing to the corresponding employee details page. [Have a look in this documentation](/home/minhun/dev/parks/parks-employee-management-system-web-app/docs/design/pages/employee-details.md)
 
 ## Monthly summaries table
 - The columns follow `EmployeeMonthAdmin` in `src/backend/employees/admin.py`:
 ```text
-Employee | Year | Month | Opening hour balance | Closing hour balance |Opening vacation balance |Closing vacation balance
+Employee | Year | Month | Opening hour balance | Closing hour balance | Opening vacation balance | Closing vacation balance
 ```
 - The table is globally scoped, so managers can compare employees. It supports employee search, year filtering, month filtering, sorting, and pagination.
 
