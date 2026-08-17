@@ -53,31 +53,31 @@
                             <h2 class="mt-2 text-2xl font-bold">Check the Import folder</h2>
                             <p class="mt-2 max-w-xl text-sm leading-6 text-[#757575]">PARKS will look for last month’s CSV files and verify that they are ready to process.</p>
                         </div>
-                        <span class="border border-[#cccccc] px-3 py-2 text-xs font-bold uppercase tracking-wide text-[#757575]">Ready to check</span>
+                        <span id="ready-signal" class="border-4 border-[#cccccc] px-3 py-2 text-xs font-bold uppercase tracking-wide text-[#757575]">Ready to check</span>
                     </div>
                     {% csrf_token %}
                     <div class="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center">
-                        <button id="import-csv-button-check" type="button" class="inline-flex min-h-11 items-center justify-center bg-[#76b900] px-6 py-3 text-base font-bold text-black transition hover:bg-[#5a8d00] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2">Check for CSV files <span class="ml-3" aria-hidden="true">→</span></button>
+                        <button id="import-csv-button-check" type="button" class="inline-flex min-h-11 items-center justify-center border-2 enabled:border-[#76b900] enabled:bg-[#76b900] px-6 py-3 text-base font-bold text-black transition enabled:hover:bg-[#5a8d00] enabled:hover:border-[#5a8d00] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 disabled:bg-[#5a8d00] disabled:border-[#5a8d00] disabled:cursor-not-allowed">Check for CSV files<span class="ml-3" aria-hidden="true">→</span></button>
                         
-                        <button id="import-csv-button-import" type="button" hidden class="inline-flex min-h-11 items-center justify-center border-2 border-[#76b900] px-5 py-3 text-base font-bold text-black transition hover:bg-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2">Import files <span class="ml-3" aria-hidden="true">→</span></button>
+                        <button id="import-csv-button-import" type="button" hidden class="inline-flex min-h-11 items-center justify-center enabled:border-2 enabled:border-[#76b900] px-5 py-3 text-base font-bold text-black transition enabled:hover:bg-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 disabled:bg-[#5a8d00] disabled:border-[#5a8d00] disabled:cursor-not-allowed">Import files<span class="ml-3" aria-hidden="true">→</span></button>
                     </div>
                     <p id="import-csv-status-check" class="mt-5 min-h-6 border-l-2 border-[#76b900] pl-4 text-sm font-bold" role="status" aria-live="polite"></p>
                     <a id="reconnect-google" hidden class="mt-4 inline-block text-sm font-bold text-[#0046a4] underline hover:text-black focus:outline-none focus:ring-2 focus:ring-[#76b900]">Reconnect Google <span aria-hidden="true">→</span></a>
                 </article>
 
-                <div class="mt-8 grid gap-6 sm:grid-cols-3">
-                    <div class="border-t-2 border-[#76b900] pt-4">
+                <div class="mt-8 grid gap-6 sm:grid-cols-3" id="pipeline-container">
+                    <div class="border-t-10 border-[#cccccc] pt-4">
                         <p class="text-xs font-bold uppercase tracking-wide text-[#757575]">01</p>
                         <p class="mt-2 font-bold">Upload</p><p class="mt-1 text-sm text-[#757575]">Add CSV files to Import.</p>
                     </div>
                     
-                    <div class="border-t-2 border-[#cccccc] pt-4">
+                    <div class="border-t-10 border-[#cccccc] pt-4">
                         <p class="text-xs font-bold uppercase tracking-wide text-[#757575]">02</p>
                         <p class="mt-2 font-bold">Process</p>
                         <p class="mt-1 text-sm text-[#757575]">Run the import check and action.</p>
                     </div>
                     
-                    <div class="border-t-2 border-[#cccccc] pt-4">
+                    <div class="border-t-10 border-[#cccccc] pt-4">
                         <p class="text-xs font-bold uppercase tracking-wide text-[#757575]">03</p>
                         <p class="mt-2 font-bold">Review</p>
                         <p class="mt-1 text-sm text-[#757575]">Confirm spreadsheet and reports.</p>

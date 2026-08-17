@@ -260,7 +260,7 @@ class CsvParser:
 
         employee_name_including_row = normalized_data[2]
         file_extracted_employee_name = employee_name_including_row[0]
-        if file_extracted_employee_name != employee_name:
+        if not employee_name in file_extracted_employee_name:
             raise ValueError(
                 f"CSV filename says: {employee_name}, but the file extracted name is {file_extracted_employee_name}. "
                 f"Please inspect this file again."
@@ -666,7 +666,6 @@ class GoogleSheetsHelper:
             ).execute()
 
         data_row_count = max(len(existing_rows), len(rows))
-        print(f"date_row_count: {data_row_count}")
         
         requests = []
         requests.extend(GoogleSheetsHelper._create_week_borders(
@@ -681,7 +680,6 @@ class GoogleSheetsHelper:
             rows,
             data_row_count,
         ))
-        print(f"requests: {requests}")
         
         if requests:
             sheets_service.spreadsheets().batchUpdate(
