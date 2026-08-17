@@ -32,4 +32,9 @@
     - Red: kitchen
     - Grey: service sector
 
+## After manually inserting everything taken from the calendar
+- Monthly summaries from sheets
+- PDF export that would be sent to every employee without warnings
+- Plannungsuebersicht is created and sent to Daniel and Robert
+- 
 
