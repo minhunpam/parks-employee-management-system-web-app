@@ -11,6 +11,9 @@
 - It makes POST request with request's body being the passed-in payload to the Django backend.
 - [Backend handles the request](#how-django-backend-handles-the-request)
 - Frontend receives the response, then handles and displays the result to the user accordingly.
+  - For a successful setup, it will navigate the user to the entry page, in which the UI for main logic will be displayed.
+    - **[See this documentation to understand more](/home/minhun/dev/parks/parks-employee-management-system-web-app/docs/architecture/main-logic-flow.md)**
+---
 
 ## How Django backend handles the request
 - The first thing the backend does is with the request's body is:
@@ -19,9 +22,7 @@
   - If no existing configuration is found, we will create a new one.
   - If an existing configuration is found, but the root folder it and the spreadsheet id were changed, it will raise 400 Error and ask the user for confirmation to update the configuration ---> Restart `saveSetup()`
 - Next step is [validating the resource IDs](#validating-the-resource-ids)
-- After the validation, for non-existing configuration instance, a new one will be created and saved to the database (_at least the Django admin DB for now_). The spreadsheet will be inspected to determine if it contains the `Mitarbeiterdaten` sheet.
-  - If exists, it will return a 200 response back to frontend
-  - Otherwise, it will return a 422 response back to frontend
+- After the validation, for non-existing configuration instance, a new one will be created and saved to the database (_at least the Django admin DB for now_).
 
 
 ### Parsing the resource IDs:

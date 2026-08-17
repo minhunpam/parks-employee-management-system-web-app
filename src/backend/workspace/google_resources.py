@@ -1,7 +1,14 @@
 # Built-in modules
+import csv
+import io
 import re
+import calendar
+from datetime import date, datetime
 from urllib.parse import parse_qs, urlparse
+from typing import ClassVar
 from cryptography.fernet import Fernet
+import itertools
+import holidays
 
 # Django modules
 from django.conf import settings
@@ -10,104 +17,829 @@ from django.conf import settings
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
 
-DRIVE_FOLDER_URL = re.compile(r"/folders/([^/?#]+)")
-SPREADSHEET_URL = re.compile(r"/spreadsheets/d/([^/?#]+)")
-
-def parse_resource_id(value, resource_type):
-    value = value.strip()
-    if not value:
-        raise ValueError("A resource ID or URL is required.")
-
-    pattern = DRIVE_FOLDER_URL if resource_type == "folder" else SPREADSHEET_URL
-
-    match = re.search(pattern, value)
-    if match:
-        return match.group(1)
-
-    parsed = urlparse(value)
-    
-    if parsed.scheme or parsed.netloc:
-        raise ValueError("Enter a valid Google Drive or Sheets URL.")
-
-    return value
-
-
-def build_google_services(connection):
-    refresh_token = Fernet(settings.FERNET_KEY).decrypt(
-        connection.encrypted_refresh_token.encode()
-    ).decode()
-    
-    credentials = Credentials(
-        token=None,
-        refresh_token=refresh_token,
-        token_uri="https://oauth2.googleapis.com/token",
-        client_id=settings.GOOGLE_OAUTH_CLIENT_ID,
-        client_secret=settings.GOOGLE_OAUTH_CLIENT_SECRET,
-        scopes=settings.DRIVE_SCOPES,
+class GoogleResources:
+    DRIVE_FOLDER_URL_REGEX_PATTERN: ClassVar[re.Pattern] = re.compile(r"/folders/([^/?#]+)")
+    SPREADSHEET_URL_REGEX_PATTERN: ClassVar[re.Pattern] = re.compile(r"/spreadsheets/d/([^/?#]+)")
+    CSV_FILENAME_URL_REGEX_PATTERN: ClassVar[re.Pattern] = re.compile(
+        r"^Schicht_(?P<employee_name>.+)_(?P<month>[^_]+)_(?P<year>20\d{2})\.csv$"
     )
-    credentials.refresh(Request())
     
-    return (
-        # Build the Google Drive and Sheets API clients
-        build("drive", "v3", credentials=credentials, cache_discovery=False),
-        build("sheets", "v4", credentials=credentials, cache_discovery=False),
+    IMPORT_FOLDER_NAME: ClassVar[str] = "Import"
+    GERMAN_MONTHS: ClassVar[tuple[str, ...]] = (
+        "Januar", "Februar", "März", "April", "Mai", "Juni",
+        "Juli", "August", "September", "Oktober", "November", "Dezember",
     )
 
+    @staticmethod
+    def parse_resource_id(value, resource_type):
+        value = value.strip()
+        if not value:
+            raise ValueError("A resource ID or URL is required.")
 
-def validate_resources(drive, sheets, root_folder_id, spreadsheet_id):
-    folder = drive.files().get(
-        fileId=root_folder_id,
-        fields="id,name,mimeType,capabilities(canEdit)", # tells Google which properties to include in the response
-        supportsAllDrives=True,
-    ).execute()
-        
-    if folder.get("mimeType") != "application/vnd.google-apps.folder":
-        raise ValueError("The Drive resource is not a folder.")
-    if not folder.get("capabilities", {}).get("canEdit"):
-        raise PermissionError("You need write access to the Drive root folder.")
-
-    spreadsheet_file = drive.files().get(
-        fileId=spreadsheet_id,
-        fields="id,mimeType,capabilities(canEdit)",
-        supportsAllDrives=True,
-    ).execute()
-    if spreadsheet_file.get("mimeType") != "application/vnd.google-apps.spreadsheet":
-        raise ValueError("The Google resource is not a spreadsheet.")
-    if not spreadsheet_file.get("capabilities", {}).get("canEdit"):
-        raise PermissionError("You need write access to the main spreadsheet.")
-
-    spreadsheet = sheets.spreadsheets().get(
-        spreadsheetId=spreadsheet_id,
-        fields="spreadsheetId,properties(title),sheets(properties(title))",
-    ).execute()
-
-    return folder, spreadsheet
-
-def _list_files(drive_service) -> None:
-    '''
-    This function serves the understanding purpose
-    It might not be used for the real codebase
-    '''
-    response = (
-        drive_service.files()
-        .list(
-            pageSize=10,
-            fields="files(id, name, mimeType)",
+        pattern = (
+            GoogleResources.DRIVE_FOLDER_URL_REGEX_PATTERN
+            if resource_type == "folder"
+            else GoogleResources.SPREADSHEET_URL_REGEX_PATTERN
         )
-        .execute()
-    )
+        match = re.search(pattern, value)
+        if match:
+            return match.group(1)
 
-    files = response.get("files", [])
+        parsed = urlparse(value)
+        if parsed.scheme or parsed.netloc:
+            query_id = parse_qs(parsed.query).get("id", [None])[0]
+            if query_id:
+                return query_id
+            raise ValueError("Enter a valid Google Drive or Sheets URL.")
 
-    for file in files:
-        print(f"File name: {file["name"]}")
-        print(f"File ID: {file["id"]}")
-        print(f"File MIME type: {file["mimeType"]}")
-        print()
+        return value
 
+    @staticmethod
+    def build_services(connection):
+        refresh_token = Fernet(settings.FERNET_KEY).decrypt(
+            connection.encrypted_refresh_token.encode()
+        ).decode()
+
+        credentials = Credentials(
+            token=None,
+            refresh_token=refresh_token,
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=settings.GOOGLE_OAUTH_CLIENT_ID,
+            client_secret=settings.GOOGLE_OAUTH_CLIENT_SECRET,
+            scopes=settings.DRIVE_SCOPES,
+        )
+        credentials.refresh(Request())
+
+        return (
+            build("drive", "v3", credentials=credentials, cache_discovery=False),
+            build("sheets", "v4", credentials=credentials, cache_discovery=False),
+        )
+
+    @staticmethod
+    def _get_import_folder_name_and_german_month(configuration):
+        month = configuration.period_month
+        year = configuration.period_year
+        
+        return (
+            f"{month:02d}_{year}",
+            GoogleResources.GERMAN_MONTHS[month - 1],
+        )
+
+    @staticmethod
+    def _drive_children(drive, parent_folder_id, mime_type=None):
+        query = f"'{parent_folder_id}' in parents and trashed = false"
+        if mime_type:
+            query += f" and mimeType = '{mime_type}'"
+
+        files = []
+        page_token = None
+        while True:
+            response = drive.files().list(
+                q=query,
+                spaces="drive",
+                fields="nextPageToken,files(id,name,mimeType)",
+                pageToken=page_token,
+                supportsAllDrives=False,
+                includeItemsFromAllDrives=False,
+            ).execute()
+            files.extend(response.get("files", []))
+            page_token = response.get("nextPageToken")
+            if not page_token:
+                return files
+
+    @staticmethod
+    def _get_or_create_folder(drive, parent_id, name):
+        is_created = True
+        
+        folders = [
+            item for item in GoogleResources._drive_children(
+                drive, parent_id, "application/vnd.google-apps.folder"
+            )
+            if item.get("name") == name
+        ]
+        if folders:
+            is_created = False
+            return folders[0], is_created
+
+        folder = drive.files().create(
+            body={
+                "name": name,
+                "mimeType": "application/vnd.google-apps.folder",
+                "parents": [parent_id],
+            },
+            fields="id,name,mimeType",
+            supportsAllDrives=False,
+        ).execute()
+        
+        return folder, True
+
+    @staticmethod
+    def prepare_csv_import_folder(drive, root_folder_id, configuration):
+        year = configuration.period_year
+        
+        folder_name, german_month = GoogleResources._get_import_folder_name_and_german_month(configuration)
+        import_folder, import_created = GoogleResources._get_or_create_folder(
+            drive, root_folder_id, GoogleResources.IMPORT_FOLDER_NAME
+        )
+        month_folder, month_created = GoogleResources._get_or_create_folder(
+            drive, import_folder["id"], folder_name
+        )
+
+        files = [
+            item for item in GoogleResources._drive_children(drive, month_folder["id"])
+            if (
+                item.get("name", "").lower().endswith(".csv")
+                and "[archived]" not in item.get("name", "").lower()
+            )
+        ]
+
+        invalid_files = []
+        valid_files = []
+        for item in files:
+            match = re.fullmatch(GoogleResources.CSV_FILENAME_URL_REGEX_PATTERN, item.get("name", ""))
+            if (
+                not match
+                or match.group("month") != german_month
+                or int(match.group("year")) != year
+            ):
+                invalid_files.append(item.get("name", ""))
+            else:
+                valid_files.append(item)
+
+        return {
+            "import_folder": import_folder,
+            "month_folder": month_folder,
+            "folder_name": folder_name,
+            "german_month": german_month,
+            "year": year,
+            "import_created": import_created,
+            "month_created": month_created,
+            "files": valid_files,
+            "invalid_files": invalid_files,
+        }
+
+    @staticmethod
+    def download_file_content(drive_service, file_id):
+        request = drive_service.files().get_media(
+            fileId=file_id,
+        )
+        buffer = io.BytesIO()
+        downloader = MediaIoBaseDownload(buffer, request)
+
+        done = False
+        while not done:
+            _, done = downloader.next_chunk()
+
+        content = buffer.getvalue()
+        if content.lstrip().startswith(b"{"):
+            raise ValueError("Google Drive returned file metadata instead of CSV content.")
+
+        return content
+
+    @staticmethod
+    def validate_resources(drive_service, sheets_service, root_folder_id, spreadsheet_id):
+        folder = drive_service.files().get(
+            fileId=root_folder_id,
+            fields="id,name,mimeType,capabilities(canEdit)",
+            supportsAllDrives=False,
+        ).execute()
+
+        if folder.get("mimeType") != "application/vnd.google-apps.folder":
+            raise ValueError("The Drive resource is not a folder.")
+        if not folder.get("capabilities", {}).get("canEdit"):
+            raise PermissionError("You need write access to the Drive root folder.")
+
+        spreadsheet_file = drive_service.files().get(
+            fileId=spreadsheet_id,
+            fields="id,mimeType,capabilities(canEdit)",
+            supportsAllDrives=False,
+        ).execute()
+        if spreadsheet_file.get("mimeType") != "application/vnd.google-apps.spreadsheet":
+            raise ValueError("The Google resource is not a spreadsheet.")
+        if not spreadsheet_file.get("capabilities", {}).get("canEdit"):
+            raise PermissionError("You need write access to the main spreadsheet.")
+
+        spreadsheet = sheets_service.spreadsheets().get(
+            spreadsheetId=spreadsheet_id,
+            fields="spreadsheetId,properties(title),sheets(properties(sheetId,title))",
+        ).execute()
+        
+        return folder, spreadsheet
+
+class CsvParser:
+    @staticmethod
+    def parse_csv_content(content, file_name, expected_month, expected_year):
+        filename_match = re.fullmatch(GoogleResources.CSV_FILENAME_URL_REGEX_PATTERN, file_name)
+        if not filename_match:
+            raise ValueError("The CSV filename does not follow the required convention.")
+
+        employee_name = filename_match.group("employee_name")
+
+        text = content.decode("windows-1252")
+        
+        entries = {}
+        days_in_month = calendar.monthrange(expected_year, expected_month)[1]
+        for day in range(1, days_in_month + 1):
+            date_str = f"{day:02d}.{expected_month:02d}.{expected_year}"
+            entries[date_str] = []
+        
+        normalized_data = []
+        csv_reader = csv.reader(io.StringIO(text), delimiter=";")
+        for row in csv_reader:
+            cells = [
+                str(cell or "").strip() for cell in row
+                if cell != ""
+            ]
+
+            if not cells:
+                continue
+
+            normalized_data.append(cells)
+
+        employee_name_including_row = normalized_data[2]
+        file_extracted_employee_name = employee_name_including_row[0]
+        if file_extracted_employee_name != employee_name:
+            raise ValueError(
+                f"CSV filename says: {employee_name}, but the file extracted name is {file_extracted_employee_name}. "
+                f"Please inspect this file again."
+            )
+
+        # Delete the first 4 rows and the last 3 rows which contain unnecessary data
+        del normalized_data[0:4]
+        del normalized_data[-3:]
+        
+        for line_number, cells in enumerate(normalized_data, start=1):
+            date_value = next(
+                (
+                    cell for cell in cells
+                    if re.fullmatch(r"\d{2}\.\d{2}\.20\d{2}", cell)
+                ),
+                None,
+            )
+                
+            parsed_date = datetime.strptime(date_value, "%d.%m.%Y")
+            if (
+                parsed_date.month != expected_month
+                or parsed_date.year != expected_year
+            ):
+                raise ValueError(
+                    f'''
+                    Line {line_number} contains a date ({parsed_date}) outside the target month.
+                    Line content: {cells}
+                    '''
+                )
+
+                
+            times = [
+                cell for cell in cells
+                if re.fullmatch(r"\d{2}:\d{2}", cell)
+            ]
+
+            if len(times) != 2:
+                raise ValueError(
+                    f'''
+                    Line {line_number} does not contain exactly two time cells: {times}
+                    Line content: {cells}
+                    '''
+                )
+
+
+            remark = next(
+                (
+                    cell for cell in cells
+                    if cell == "18=Dienstschluß" or cell == "19=Pause"
+                ),
+                None,
+            )
+            
+            entries[date_value].append(
+                {
+                    "start": times[0],
+                    "end": times[1],
+                    "remark": remark,
+                }
+            )
+            
+        if not entries:
+            raise ValueError("The CSV contains no importable work entries.")
+
+        holiday_dates = CsvParser._public_holidays(expected_year)
+        entries = CsvParser._handle_entries(
+            entries,
+            holiday_dates=holiday_dates,
+        )
+        
+        return {
+            "employee": employee_name,
+            "file_name": file_name,
+            "entries": entries,
+        }
+
+    @staticmethod
+    def _public_holidays(year: int) -> set[date]:
+        """Return statutory public holidays for Graz (Styria), Austria."""
+        return set(
+            holidays.country_holidays(
+                "AT",
+                subdiv="6",  # Styria
+                years=[year],
+            ).keys()
+        )
+
+    @staticmethod
+    def _handle_entries(
+        entries: dict[str, list[dict]],
+        holiday_dates: set[date] | None = None,
+    ):
+        holiday_dates = holiday_dates or set()
+        resulted_entries = {}
+
+        for working_date, shifts in entries.items():
+            parsed_date = datetime.strptime(working_date, "%d.%m.%Y").date()
+            is_public_holiday = parsed_date in holiday_dates
+
+            if not shifts:
+                resulted_entries[working_date] = {
+                    "shift_start": "",
+                    "pause_start": "",
+                    "pause_end": "",
+                    "shift_end": "",
+                    "shift_total_time": 0.0,
+                    "pause_minutes": 0,
+                    "type_of_day": "Feiertag" if is_public_holiday else "Frei",
+                    "warnings": "Auto-Feiertag" if is_public_holiday else "",
+                }
+                continue
+
+            shifts = sorted(
+                shifts,
+                key=lambda shift: CsvParser._time_to_minutes(shift["start"]),
+            )
+
+            shift_start = shifts[0]["start"]
+            shift_end = shifts[-1]["end"]
+            shift_start_minutes = CsvParser._time_to_minutes(shift_start)
+            shift_end_minutes = CsvParser._time_to_minutes(shift_end)
+            shift_gross_minutes = shift_end_minutes - shift_start_minutes
+            
+            pause_windows = []
+            warnings = []
+
+            for current, following in itertools.pairwise(shifts):
+                current_end = CsvParser._time_to_minutes(current["end"])
+                following_start = CsvParser._time_to_minutes(following["start"])
+                pause_gap = following_start - current_end
+
+                if pause_gap < 0:
+                    warnings.append("ÜBERLAPPUNG")
+                elif 5 <= pause_gap <= 180:
+                    pause_windows.append(
+                        {
+                            "start": current["end"],
+                            "end": following["start"],
+                            "minutes": pause_gap,
+                        }
+                    )
+                elif pause_gap > 180:
+                    warnings.append("LÜCKE")
+
+            pause_minutes = sum(
+                pause["minutes"] for pause in pause_windows
+            )
+            pause_start = pause_windows[0]["start"] if pause_windows else ""
+            pause_end = pause_windows[0]["end"] if pause_windows else ""
+            working_minutes = max(shift_gross_minutes - pause_minutes, 0) # Avoid negative working minutes
+
+            if len(pause_windows) >= 3:
+                warnings.append("P3")
+            elif len(pause_windows) == 2:
+                warnings.append("P2")
+
+            # Days longer than six hours need at least 30 minutes of pause,
+            # and the first pause must begin within the first six hours.
+            first_pause_start = (
+                CsvParser._time_to_minutes(pause_start)
+                if pause_start
+                else None
+            )
+            requires_break_correction = (
+                shift_gross_minutes > 360
+                and (
+                    pause_minutes < 30
+                    or first_pause_start is None
+                    or first_pause_start - shift_start_minutes > 360
+                )
+            )
+
+            if requires_break_correction:
+                pause_minutes = max(pause_minutes, 30)
+                pause_start_minutes = shift_start_minutes + 360
+                pause_end_minutes = pause_start_minutes + 30
+                pause_start = CsvParser._minutes_to_time(pause_start_minutes)
+                pause_end = CsvParser._minutes_to_time(pause_end_minutes)
+
+                # Preserve the calculated working time while moving the end
+                # time when a synthetic pause is inserted.
+                shift_end = CsvParser._minutes_to_time(
+                    shift_start_minutes + working_minutes + pause_minutes
+                )
+                warnings.append("P6")
+
+            
+            if is_public_holiday:
+                working_minutes *= 2
+            
+            resulted_entries[working_date] = {
+                "shift_start": shift_start,
+                "pause_start": pause_start,
+                "pause_end": pause_end,
+                "shift_end": shift_end,
+                "shift_total_time": round(working_minutes / 60, 2),
+                "pause_minutes": pause_minutes,
+                "type_of_day": "Feiertag" if is_public_holiday else "Arbeit",
+                "warnings": ", ".join(dict.fromkeys(warnings)),
+            }
+
+        return resulted_entries
+
+    @staticmethod
+    def _time_to_minutes(value: str) -> int:
+        parsed_time = datetime.strptime(value, "%H:%M")
+        return parsed_time.hour * 60 + parsed_time.minute
+
+    @staticmethod
+    def _minutes_to_time(value: int) -> str:
+        hours, minutes = divmod(value, 60)
+        return f"{hours:02d}:{minutes:02d}"
+
+class GoogleSheetsHelper:
+    HEADERS: ClassVar[dict[str, list[str]]] = {
+        "employee_headers": [
+            "Datum", "Dienstbegin", "Pausenbeginn", 
+            "Pausenende", "Dienstschluss", "Pause Min", 
+            "Arbeitszeit", "Typ", "Warnung"
+        ],
+    }
+
+    @staticmethod
+    def get_sheet(spreadsheet, sheet_title):
+        '''
+        spreadsheet:  {
+            'spreadsheetId': '13WE8Nyr7MdUzEzruudf_ZTPW2gqV8ntcP3IEGLhVMUo',
+            'properties': {'title': 'test'},
+            'sheets': [
+                {'properties': {'sheetId': 1794777344, 'title': 'Angelina'}},
+                {'properties': {'sheetId': 661637231, 'title': 'Ademir'}}
+            ]
+        }
+        '''
+        return next(
+            (
+                sheet for sheet in spreadsheet.get("sheets", [])
+                if sheet.get("properties", {}).get("title") == sheet_title
+            ),
+            None,
+        )
+
+    @staticmethod
+    def has_sheet(spreadsheet, sheet_title):
+        return GoogleSheetsHelper.get_sheet(spreadsheet, sheet_title) is not None
+
+    @staticmethod
+    def create_sheet_if_not_exists(sheets_service, spreadsheet, spreadsheet_id, sheet_title):
+        existing_sheet = GoogleSheetsHelper.get_sheet(spreadsheet, sheet_title)
+        if existing_sheet is not None:
+            sheet_id = existing_sheet["properties"]["sheetId"]
+            return sheets_service.spreadsheets().batchUpdate(
+                spreadsheetId=spreadsheet_id,
+                body={
+                    "requests": [
+                        {
+                            "updateSheetProperties": {
+                                "properties": {
+                                    "sheetId": sheet_id,
+                                    "gridProperties": {
+                                        "frozenRowCount": 1
+                                    },
+                                },
+                                "fields": "gridProperties.frozenRowCount",
+                            }
+                        }
+                    ]
+                },
+            ).execute()
+
+        return sheets_service.spreadsheets().batchUpdate(
+            spreadsheetId=spreadsheet_id,
+            body={
+                "requests": [
+                    {
+                        "addSheet": {
+                            "properties": {
+                                "title": sheet_title,
+                                "gridProperties": {
+                                    "rowCount": 100,
+                                    "columnCount": 26,
+                                    "frozenRowCount": 1,
+                                },
+                            }
+                        }
+                    }
+                ]
+            },
+        ).execute()
+
+    @staticmethod
+    def setup_sheet_headers_if_not_exists(sheets_service, spreadsheet_id, sheet_title, headers):
+        response = sheets_service.spreadsheets().values().get(
+            spreadsheetId=spreadsheet_id,
+            range=f"'{sheet_title}'!A1:I1",
+        ).execute()
+
+        if not response.get("values"):
+            sheets_service.spreadsheets().values().update(
+                spreadsheetId=spreadsheet_id,
+                range=f"'{sheet_title}'!A1:I1",
+                valueInputOption="RAW",
+                body={
+                    "values": [headers]
+                },
+            ).execute()
+
+    @staticmethod
+    def read_sheet_values(sheets_service, spreadsheet_id, sheet_title):
+        '''
+        Read sheet values of `sheet_title` from `spreadsheet_id` from cell A2 to column I (horizontally) 
+        and vertically until it hits blank line
+
+        Returns:
+            - list: list of data rows
+        '''
+        response = sheets_service.spreadsheets().values().get(
+            spreadsheetId=spreadsheet_id,
+            range=f"'{sheet_title}'!A2:I",
+        ).execute()
+
+        return response.get("values", [])
+
+    @staticmethod
+    def entries_to_rows(entries):
+        return [
+            [
+                working_date,
+                entry["shift_start"],
+                entry["pause_start"],
+                entry["pause_end"],
+                entry["shift_end"],
+                entry["pause_minutes"],
+                entry["shift_total_time"],
+                entry["type_of_day"],
+                entry.get("warnings", ""),
+            ]
+            for working_date, entry in entries.items()
+        ]
+
+    @staticmethod
+    def _row_sort_key(row):
+        date_value = row[0] if row else ""
+        try:
+            date_sort_value = datetime.strptime(date_value, "%d.%m.%Y")
+        except (TypeError, ValueError):
+            date_sort_value = datetime.max
+
+
+        '''
+        For the current version, sorting by date is sufficient. The time fallback is only useful if the sheet later contains multiple rows for the same date, such as separate rows for
+        multiple pauses. Since the current implementation does not yet preserve multiple pause rows
+        '''
+        time_value = ""
+        if len(row) > 1:
+            time_value = row[1]
+        if not time_value and len(row) > 2:
+            time_value = row[2]
+
+        try:
+            time_sort_value = CsvParser._time_to_minutes(time_value)
+        except (TypeError, ValueError):
+            time_sort_value = 999999
+
+        return date_sort_value, time_sort_value
+
+    @staticmethod
+    def replace_employee_entries(sheets_service, spreadsheet, spreadsheet_id, sheet_title, entries,):
+        existing_rows = GoogleSheetsHelper.read_sheet_values(
+            sheets_service,
+            spreadsheet_id,
+            sheet_title,
+        )
+        affected_dates = set(entries.keys())
+
+        unaffected_rows = [
+            row for row in existing_rows
+            if not row or row[0] not in affected_dates
+        ]
+        imported_rows = GoogleSheetsHelper.entries_to_rows(entries)
+        rows = unaffected_rows + imported_rows
+        rows.sort(key=GoogleSheetsHelper._row_sort_key)
+
+
+        sunday_row_indices = [
+            row_index for row_index, row in enumerate(rows, start=1)
+            if datetime.strptime(row[0], "%d.%m.%Y").weekday() == calendar.SUNDAY
+        ]
+        
+        # Clear values only: formatting and columns after I remain untouched.
+        sheets_service.spreadsheets().values().clear(
+            spreadsheetId=spreadsheet_id,
+            range=f"'{sheet_title}'!A2:I",
+            body={},
+        ).execute()
+
+        if rows:
+            sheets_service.spreadsheets().values().update(
+                spreadsheetId=spreadsheet_id,
+                range=f"'{sheet_title}'!A2:I{len(rows) + 1}",
+                valueInputOption="RAW",
+                body={"values": rows},
+            ).execute()
+
+        data_row_count = max(len(existing_rows), len(rows))
+        print(f"date_row_count: {data_row_count}")
+        
+        requests = []
+        requests.extend(GoogleSheetsHelper._create_week_borders(
+            spreadsheet,
+            sheet_title,
+            sunday_row_indices,
+            data_row_count,
+        ))
+        requests.extend(GoogleSheetsHelper._format_public_holiday_rows(
+            spreadsheet,
+            sheet_title,
+            rows,
+            data_row_count,
+        ))
+        print(f"requests: {requests}")
+        
+        if requests:
+            sheets_service.spreadsheets().batchUpdate(
+                spreadsheetId=spreadsheet_id,
+                body={
+                    "requests": requests
+                },
+            ).execute()
+        
+        return len(imported_rows)
+
+    @staticmethod
+    def _format_public_holiday_rows(spreadsheet, sheet_title, rows, data_row_count,):
+        """Highlight public-holiday rows with Google Sheets' light red 3."""
+        current_sheet = GoogleSheetsHelper.get_sheet(spreadsheet, sheet_title)
+        if not current_sheet or data_row_count <= 0:
+            print("2")
+            return []
+
+        sheet_id = current_sheet["properties"]["sheetId"]
+        holiday_row_indices = [
+            row_index
+            for row_index, row in enumerate(rows, start=1)
+            if len(row) > 7 and row[7] == "Feiertag"
+        ]
+
+        holiday_color = {
+            "red": 244 / 255,
+            "green": 204 / 255,
+            "blue": 204 / 255,
+        }
+        requests = [
+            {
+                "repeatCell": { # Clearing the background color of all data rows 
+                    "range": {
+                        "sheetId": sheet_id,
+                        "startRowIndex": 1,
+                        "endRowIndex": data_row_count + 1,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 9,
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "backgroundColor": {
+                                "red": 1,
+                                "green": 1,
+                                "blue": 1,
+                            }
+                        }
+                    },
+                    "fields": "userEnteredFormat.backgroundColor",
+                }
+            }
+        ]
+
+        for row_index in holiday_row_indices:
+            requests.append(
+                {
+                    "repeatCell": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "startRowIndex": row_index,
+                            "endRowIndex": row_index + 1,
+                            "startColumnIndex": 0,
+                            "endColumnIndex": 9,
+                        },
+                        "cell": {
+                            "userEnteredFormat": {
+                                "backgroundColor": holiday_color,
+                            }
+                        },
+                        "fields": "userEnteredFormat.backgroundColor",
+                    }
+                }
+            )
+
+        return requests
+
+    @staticmethod
+    def archive_file(drive_service, file_id, file_name):
+        if file_name.lower().endswith(".csv"):
+            archived_name = f"{file_name[:-4]}[ARCHIVED].csv"
+        else:
+            archived_name = f"{file_name}[ARCHIVED]"
+
+        return drive_service.files().update(
+            fileId=file_id,
+            body={"name": archived_name},
+            fields="id,name",
+        ).execute()
+
+    @staticmethod
+    def _create_week_borders(spreadsheet, sheet_title, sunday_row_indices, data_row_count,):
+        current_sheet = GoogleSheetsHelper.get_sheet(spreadsheet, sheet_title)
+        requests = []
+        if not current_sheet or data_row_count <= 0:
+            print("1");
+            return requests
+
+        sheet_id = current_sheet["properties"]["sheetId"]
+
+        # Remove borders previously created by this method. Values are cleared
+        # during imports without clearing formatting, so Sunday rows can move.
+        for row_index in range(1, data_row_count + 1):
+            requests.append(
+                {
+                    "updateBorders": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "startRowIndex": row_index,
+                            "endRowIndex": row_index + 1,
+                            "startColumnIndex": 0,
+                            "endColumnIndex": 9,
+                        },
+                        "bottom": {"style": "NONE"},
+                    }
+                }
+            )
+
+        for sunday_row_index in sunday_row_indices:
+            requests.append(
+                {
+                    "updateBorders": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "startRowIndex": sunday_row_index,
+                            "endRowIndex": sunday_row_index + 1,
+                            "startColumnIndex": 0,
+                            "endColumnIndex": 9,
+                        },
+                        "bottom": {"style": "SOLID"},
+                    }
+                }
+            )
+
+        return requests
 
 if __name__ == "__main__":
-    print(type(DRIVE_FOLDER_URL))
-    print(type(SPREADSHEET_URL))
-    
+    test_file_path = "/home/minhun/dev/parks/parks-employee-management-system-web-app/csv_raw_data/Schicht_Angelina_Juni_2026.csv"
+    with open(test_file_path, newline="", encoding="cp1252") as f:
+        reader = csv.reader(f, delimiter=";")
+
+        normalized_data = []
+        
+        for line_number, row in enumerate(reader, start=1):
+            # print(f"Line {line_number}: {row}")
+            cells = [
+                str(cell or "").strip() for cell in row
+                if cell != ""
+            ]
+
+            if not cells:
+                continue
+
+            normalized_data.append(cells)
+
+        del normalized_data[0:4]
+        del normalized_data[-3:]
+        
+        for row in normalized_data:
+            print(row)

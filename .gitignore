@@ -3,13 +3,15 @@
 # Cache stuff
 *.pyc
 .ruff_cache/
-.__pycache__
+.__pycache__/
 
 # Virtual environment
 venv/
 
 # Frontend build artifacts
 /src/frontend/apps_scripts/
+/csv_raw_data/
+/src/frontend/node_modules/
 
 #  WARNING: Do not commit these files, since they contain sensitive credentials!!!
 credentials.json

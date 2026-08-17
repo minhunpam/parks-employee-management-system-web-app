@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="PARKS employee hours management for restaurant managers.">
+    <title>PARKS · Employee management</title>
+
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/output.css' %}">
+</head>
+<body class="bg-white font-sans text-[#1a1a1a] antialiased">
+    <header class="bg-black text-white">
+        <nav class="mx-auto flex h-16 max-w-7xl items-center justify-between px-6 lg:px-8" aria-label="Main navigation">
+            <a href="{% url 'home' %}" class="text-xl font-bold tracking-[0.18em] text-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black">PARKS</a>
+            <div class="flex items-center gap-6">
+                <span class="hidden text-sm text-white/70 sm:inline">Employee management</span>
+                <a href="{% url 'accounts:google-login' %}" class="inline-flex min-h-11 items-center border border-white px-4 py-2 text-sm font-bold transition hover:border-[#76b900] hover:text-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black">Sign in</a>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <section class="bg-black text-white" aria-labelledby="hero-heading">
+            <div class="mx-auto grid max-w-7xl items-center gap-12 px-6 py-16 sm:py-20 lg:grid-cols-[1fr_0.9fr] lg:gap-20 lg:px-8 lg:py-24">
+                <div class="max-w-2xl">
+                    <p class="mb-6 text-sm font-bold uppercase tracking-wide text-[#76b900]">Employee hours, organized</p>
+                    <h1 id="hero-heading" class="max-w-xl text-4xl font-bold leading-tight sm:text-5xl lg:text-6xl">Manage the work behind every shift.</h1>
+                    <p class="mt-6 max-w-xl text-lg leading-7 text-white/70">PARKS gives restaurant managers one focused workspace for employee records, working hours, and monthly spreadsheet workflows.</p>
+                    <div class="mt-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+                        <a href="{% url 'accounts:google-login' %}" class="inline-flex min-h-11 items-center justify-center bg-[#76b900] px-6 py-3 text-base font-bold text-black transition hover:bg-[#5a8d00] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black">Sign in with Google <span class="ml-3" aria-hidden="true">→</span></a>
+                        <span class="text-sm text-white/60">Secure access for approved managers</span>
+                    </div>
+                </div>
+
+                <div class="relative border border-[#5e5e5e] bg-[#1a1a1a] p-6" aria-label="Preview of the PARKS workspace">
+                    <span class="absolute -left-px -top-px h-3 w-3 bg-[#76b900]" aria-hidden="true"></span>
+                    <div class="flex items-start justify-between border-b border-[#5e5e5e] pb-5">
+                        <div>
+                            <p class="text-xs font-bold uppercase tracking-wide text-white/50">Workspace overview</p>
+                            <p class="mt-2 text-xl font-bold">June 2026</p>
+                        </div>
+                        <span class="border border-[#76b900] px-3 py-1 text-xs font-bold uppercase text-[#76b900]">Ready</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 py-5">
+                        <div class="border border-[#5e5e5e] p-4"><p class="text-sm text-white/60">Employees</p><p class="mt-2 text-3xl font-bold">12</p></div>
+                        <div class="border border-[#76b900] p-4"><p class="text-sm text-[#76b900]">Monthly hours</p><p class="mt-2 text-3xl font-bold">1,284</p></div>
+                    </div>
+                    <div class="border border-[#5e5e5e] p-4">
+                        <div class="flex items-center justify-between"><span class="text-sm font-bold">Monthly import</span><span class="text-xs font-bold uppercase text-[#76b900]">Complete</span></div>
+                        <div class="mt-5 h-2 bg-[#5e5e5e]"><div class="h-2 w-full bg-[#76b900]"></div></div>
+                        <p class="mt-3 text-xs text-white/60">Employee data is organized in your workspace.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="border-b border-[#cccccc]" aria-labelledby="benefits-heading">
+            <div class="mx-auto max-w-7xl px-6 py-16 lg:px-8">
+                <div class="max-w-2xl">
+                    <p class="text-sm font-bold uppercase tracking-wide text-[#76b900]">A clear operating view</p>
+                    <h2 id="benefits-heading" class="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">Less manual work. More clarity.</h2>
+                </div>
+                <div class="mt-12 grid gap-6 md:grid-cols-3">
+                    <article class="relative border border-[#cccccc] p-8"><span class="absolute -left-px -top-px h-3 w-3 bg-[#76b900]" aria-hidden="true"></span><p class="text-2xl font-bold text-[#76b900]">01</p><h3 class="mt-8 text-xl font-bold">Manage employee records</h3><p class="mt-3 leading-6 text-[#1a1a1a]">Keep your team’s information organized and easy to maintain.</p></article>
+                    <article class="relative border border-[#cccccc] p-8"><span class="absolute -left-px -top-px h-3 w-3 bg-[#76b900]" aria-hidden="true"></span><p class="text-2xl font-bold text-[#76b900]">02</p><h3 class="mt-8 text-xl font-bold">Track working hours</h3><p class="mt-3 leading-6 text-[#1a1a1a]">Review monthly hours with a clear view of the information that matters.</p></article>
+                    <article class="relative border border-[#cccccc] p-8"><span class="absolute -left-px -top-px h-3 w-3 bg-[#76b900]" aria-hidden="true"></span><p class="text-2xl font-bold text-[#76b900]">03</p><h3 class="mt-8 text-xl font-bold">Simplify spreadsheets</h3><p class="mt-3 leading-6 text-[#1a1a1a]">Connect Google Drive and Sheets without handling every step manually.</p></article>
+                </div>
+            </div>
+        </section>
+
+        <section class="bg-[#f7f7f7]" aria-labelledby="workflow-heading">
+            <div class="mx-auto grid max-w-7xl gap-10 px-6 py-16 lg:grid-cols-[0.8fr_1.2fr] lg:items-center lg:px-8">
+                <div><p class="text-sm font-bold uppercase tracking-wide text-[#76b900]">Built for the monthly rhythm</p><h2 id="workflow-heading" class="mt-3 text-3xl font-bold">From imported CSV files to a reviewable report.</h2></div>
+                <ol class="grid gap-0 border-l-2 border-[#76b900]">
+                    <li class="border-b border-[#cccccc] px-6 py-4"><span class="font-bold">01 · Import</span><span class="ml-3 text-[#757575]">Place monthly CSV files in the configured Drive folder.</span></li>
+                    <li class="border-b border-[#cccccc] px-6 py-4"><span class="font-bold">02 · Process</span><span class="ml-3 text-[#757575]">Use the monthly workflow to organize employee hours.</span></li>
+                    <li class="px-6 py-4"><span class="font-bold">03 · Review</span><span class="ml-3 text-[#757575]">Check spreadsheet and report data before sending PDFs.</span></li>
+                </ol>
+            </div>
+        </section>
+    </main>
+
+    <footer class="bg-black text-white/70">
+        <div class="mx-auto max-w-7xl px-6 py-16 lg:px-8">
+            <div class="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+                <div><p class="text-xl font-bold tracking-[0.18em] text-[#76b900]">PARKS</p><p class="mt-4 max-w-xs text-sm leading-6">Employee management for focused, reliable operations.</p></div>
+                <div><h2 class="font-bold text-white">Product</h2><a href="{% url 'accounts:google-login' %}" class="mt-4 block text-sm hover:text-[#76b900]">Sign in</a></div>
+                <div><h2 class="font-bold text-white">Workflow</h2><p class="mt-4 text-sm">Employees<br>Working hours<br>Monthly imports</p></div>
+                <div><h2 class="font-bold text-white">Access</h2><p class="mt-4 text-sm">Google account<br>Approved managers</p></div>
+            </div>
+            <div class="mt-12 border-t border-[#5e5e5e] pt-6 text-xs uppercase tracking-wide text-[#898989]">© PARKS · Employee management system</div>
+        </div>
+    </footer>
+</body>
+</html>

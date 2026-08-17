@@ -3,21 +3,67 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Approval Setting</title>
+    <meta name="description" content="PARKS account approval status.">
+    <title>Account approval · PARKS</title>
 
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/output.css' %}">
 </head>
-<body>
-    <div>
-        <h1>PARKS</h1>
-        <h2>Account awaiting approval</h2>
-        <p>Your Google account was verified successfully, but your access to the
-  PARKS employee management system has not yet been approved.</p>
-        <p>Please ask a PARKS administrator to activate your account. Once approved,
-  sign in again.</p>
-        <div>
-            <button>Return to home</button>
-            <button>Use another Google account</button>
+<body class="min-h-screen bg-white font-sans text-[#1a1a1a] antialiased">
+    <header class="bg-black text-white">
+        <nav class="mx-auto flex h-16 max-w-7xl items-center justify-between px-6 lg:px-8" aria-label="Main navigation">
+            <a href="{% url 'home' %}" class="text-xl font-bold tracking-[0.18em] text-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black">PARKS</a>
+            <span class="hidden text-sm text-white/70 sm:inline">Employee management</span>
+        </nav>
+    </header>
+
+    <main>
+        <section class="bg-black text-white">
+            <div class="mx-auto max-w-7xl px-6 py-16 lg:px-8 lg:py-24">
+                <div class="max-w-3xl">
+                    <p class="text-sm font-bold uppercase tracking-wide text-[#76b900]">Access status</p>
+                    <h1 class="mt-4 text-4xl font-bold leading-tight sm:text-5xl">Your account is waiting for approval.</h1>
+                    <p class="mt-6 max-w-2xl text-lg leading-7 text-white/70">Your Google account was verified successfully. A PARKS administrator still needs to activate your access before you can enter the employee management system.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="mx-auto grid max-w-7xl gap-8 px-6 py-14 lg:grid-cols-[1.1fr_0.9fr] lg:px-8 lg:py-16">
+            <article class="relative border border-[#cccccc] p-6 sm:p-8">
+                <span class="absolute -left-px -top-px h-3 w-3 bg-[#76b900]" aria-hidden="true"></span>
+                <div class="flex h-12 w-12 items-center justify-center border-2 border-[#76b900] text-xl font-bold text-[#76b900]" aria-hidden="true">✓</div>
+                <h2 class="mt-8 text-2xl font-bold">Verification complete</h2>
+                <p class="mt-4 max-w-xl leading-7 text-[#1a1a1a]">Please ask a PARKS administrator to activate your account. Once your access has been approved, sign in again with your Google account.</p>
+                <div class="mt-8 flex flex-col gap-4 sm:flex-row">
+                    <a href="{% url 'home' %}" class="inline-flex min-h-11 items-center justify-center bg-[#76b900] px-6 py-3 text-base font-bold text-black transition hover:bg-[#5a8d00] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2">Return to home <span class="ml-3" aria-hidden="true">→</span></a>
+                    <a href="{% url 'accounts:google-login' %}" class="inline-flex min-h-11 items-center justify-center border-2 border-[#76b900] px-5 py-3 text-base font-bold text-black transition hover:bg-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2">Use another account <span class="ml-3" aria-hidden="true">→</span></a>
+                </div>
+            </article>
+
+            <aside class="self-start border border-[#cccccc] bg-[#f7f7f7] p-6 sm:p-8" aria-labelledby="next-step-heading">
+                <span class="mb-6 block h-3 w-3 bg-[#76b900]" aria-hidden="true"></span>
+                <p class="text-sm font-bold uppercase tracking-wide text-[#76b900]">What happens next</p>
+                <h2 id="next-step-heading" class="mt-3 text-xl font-bold">A simple handoff.</h2>
+                <ol class="mt-6 divide-y divide-[#cccccc] border-y border-[#cccccc]">
+                    <li class="flex gap-4 py-4"><span class="font-bold text-[#76b900]">01</span><span class="text-sm leading-6">Ask a PARKS administrator to approve your account.</span></li>
+                    <li class="flex gap-4 py-4"><span class="font-bold text-[#76b900]">02</span><span class="text-sm leading-6">Return here after your access has been activated.</span></li>
+                    <li class="flex gap-4 py-4"><span class="font-bold text-[#76b900]">03</span><span class="text-sm leading-6">Sign in again to open your workspace.</span></li>
+                </ol>
+            </aside>
+        </section>
+
+        <section class="border-t border-[#cccccc] bg-[#f7f7f7]">
+            <div class="mx-auto max-w-7xl px-6 py-12 lg:px-8">
+                <p class="max-w-2xl text-sm leading-6 text-[#757575]">Need help? Contact your PARKS administrator and let them know which Google account you used to sign in.</p>
+            </div>
+        </section>
+    </main>
+
+    <footer class="bg-black text-white/70">
+        <div class="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-8 text-sm sm:flex-row sm:items-center sm:justify-between lg:px-8">
+            <span class="font-bold tracking-[0.18em] text-[#76b900]">PARKS</span>
+            <span>Employee management system</span>
         </div>
-    </div>
+    </footer>
 </body>
 </html>
