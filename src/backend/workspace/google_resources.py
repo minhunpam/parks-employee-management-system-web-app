@@ -78,16 +78,13 @@ class GoogleResources:
         )
 
     @staticmethod
-    def _import_previous_period():
-        today = date.today()
-        year, month = today.year, today.month - 1
-        if month == 0:
-            year, month = year - 1, 12
-
+    def _get_import_folder_name_and_german_month(configuration):
+        month = configuration.period_month
+        year = configuration.period_year
+        
         return (
             f"{month:02d}_{year}",
             GoogleResources.GERMAN_MONTHS[month - 1],
-            year,
         )
 
     @staticmethod
@@ -139,8 +136,10 @@ class GoogleResources:
         return folder, True
 
     @staticmethod
-    def prepare_csv_import_folder(drive, root_folder_id):
-        folder_name, german_month, year = GoogleResources._import_previous_period()
+    def prepare_csv_import_folder(drive, root_folder_id, configuration):
+        year = configuration.period_year
+        
+        folder_name, german_month = GoogleResources._get_import_folder_name_and_german_month(configuration)
         import_folder, import_created = GoogleResources._get_or_create_folder(
             drive, root_folder_id, GoogleResources.IMPORT_FOLDER_NAME
         )

@@ -8,9 +8,14 @@ const connectUrl = page.dataset.connectUrl;
 const form = document.querySelector("#setup-form");
 const rootFolderInput = document.querySelector("#root-folder-id");
 const spreadsheetInput = document.querySelector("#spreadsheet-id");
+const periodMonthInput = document.querySelector("#period-month");
+const periodYearInput = document.querySelector("#period-year");
 
 const setupStatus = document.querySelector("#setup-status");
 const reconnectGoogle = document.querySelector("#reconnect-google");
+const confirmationDialog = document.querySelector("#workspace-confirmation-dialog");
+const confirmationMessage = document.querySelector("#workspace-confirmation-message");
+const confirmationInput = document.querySelector("#workspace-confirmation-input");
 
 const sessionStorageDraftKey = "workspace-setup-draft";
 
@@ -18,6 +23,8 @@ function saveDraft() {
     sessionStorage.setItem(sessionStorageDraftKey, JSON.stringify({
         root_folder_id: rootFolderInput.value,
         spreadsheet_id: spreadsheetInput.value,
+        period_month: periodMonthInput.value,
+        period_year: periodYearInput.value,
     }));
 }
 
@@ -27,10 +34,51 @@ function restoreDraft() {
     if (draft) {
         rootFolderInput.value = draft.root_folder_id || "";
         spreadsheetInput.value = draft.spreadsheet_id || "";
+        periodMonthInput.value = draft.period_month || "";
+        periodYearInput.value = draft.period_year || "";
     }
 }
 
 restoreDraft();
+
+function showWorkspaceConfirmation(confirmationPhrase) {
+  return new Promise((resolve) => {
+    
+    confirmationMessage.textContent = "Type ";
+    const code = document.createElement("code");
+    code.classList.add(
+      "border",
+      "border-[#cccccc]",
+      "bg-[#f7f7f7]",
+      "px-1",
+      "py-0.5",
+      "font-bold",
+      "text-[#1a1a1a]",
+    );
+    
+    code.textContent = confirmationPhrase;
+    confirmationMessage.append(code, " to confirm this change.");
+
+    confirmationInput.value = "";
+    confirmationDialog.returnValue = "cancel";
+
+    const handleClose = () => {
+      confirmationDialog.removeEventListener("close", handleClose);
+      document.body.classList.remove("overflow-hidden");
+      
+      resolve(
+          confirmationDialog.returnValue === "confirm"
+              ? confirmationInput.value
+              : null,
+      );
+    };
+
+    confirmationDialog.addEventListener("close", handleClose);
+    confirmationDialog.showModal();
+    confirmationInput.focus();
+    document.body.classList.add("overflow-hidden");
+  });
+}
 
 
 async function saveSetup(payload) {
@@ -61,7 +109,7 @@ form.addEventListener("submit", async (event) => {
       result = await saveSetup(payload);
 
       if (result.result.requires_confirmation) {
-          const confirmation = prompt(result.result.error);
+          const confirmation = await showWorkspaceConfirmation(result.result.confirmation_phrase);
           if (confirmation === null) {
               setupStatus.textContent = "Configuration change cancelled.";
               return;

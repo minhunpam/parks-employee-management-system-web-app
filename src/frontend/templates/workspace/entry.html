@@ -58,6 +58,7 @@
                     {% csrf_token %}
                     <div class="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center">
                         <button id="import-csv-button-check" type="button" class="inline-flex min-h-11 items-center justify-center bg-[#76b900] px-6 py-3 text-base font-bold text-black transition hover:bg-[#5a8d00] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2">Check for CSV files <span class="ml-3" aria-hidden="true">→</span></button>
+                        
                         <button id="import-csv-button-import" type="button" hidden class="inline-flex min-h-11 items-center justify-center border-2 border-[#76b900] px-5 py-3 text-base font-bold text-black transition hover:bg-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2">Import files <span class="ml-3" aria-hidden="true">→</span></button>
                     </div>
                     <p id="import-csv-status-check" class="mt-5 min-h-6 border-l-2 border-[#76b900] pl-4 text-sm font-bold" role="status" aria-live="polite"></p>
@@ -107,6 +108,16 @@
                             {% if configuration.spreadsheet_id %}
                             <a class="mt-2 inline-block text-sm text-[#0046a4] underline" href="https://docs.google.com/spreadsheets/d/{{ configuration.spreadsheet_id }}/edit" target="_blank" rel="noopener">Open in Sheets <span aria-hidden="true">↗</span></a>
                             {% endif %}
+                        </div>
+
+                        <div class="py-4">
+                            <dt class="text-xs font-bold uppercase tracking-wide text-[#757575]">Main spreadsheet</dt>
+                            <dd class="mt-2 break-all text-sm font-bold">{{ configuration.period_month|default:"Not configured" }}</dd>
+                        </div>
+
+                        <div class="py-4">
+                            <dt class="text-xs font-bold uppercase tracking-wide text-[#757575]">Main spreadsheet</dt>
+                            <dd class="mt-2 break-all text-sm font-bold">{{ configuration.period_year|default:"Not configured" }}</dd>
                         </div>
                     </dl>
                 {% else %}

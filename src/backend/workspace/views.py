@@ -43,7 +43,7 @@ def entry(request):
         {"configuration": configuration},
     )
 
-def _validated_csv_import_context(request):
+def _validate_csv_import_context(request):
     '''
     This function centralizes the validation and preparation of the CSV import context and it can be used by
     relevant endpoints to ensure consistent CSV import behavior.
@@ -57,9 +57,7 @@ def _validated_csv_import_context(request):
     connection = getattr(request.user, "google_connection", None)
     configuration = getattr(request.user, "owned_workspace", None)
 
-    validation_response = Validator.validate_connection_and_configuration(
-        connection, configuration
-    )
+    validation_response = Validator.validate_connection_and_configuration(connection, configuration)
     if validation_response is not None:
         return validation_response
 
@@ -72,7 +70,7 @@ def _validated_csv_import_context(request):
             )
         )
         import_state = GoogleResources.prepare_csv_import_folder(
-            drive_service, folder["id"]
+            drive_service, folder["id"], configuration
         )
     except RefreshError:
         return JsonResponse(
@@ -153,7 +151,7 @@ def _csv_import_state_response(context):
 @login_required
 @require_POST
 def csv_import_check(request):
-    context = _validated_csv_import_context(request)
+    context = _validate_csv_import_context(request)
     if isinstance(context, JsonResponse):
         return context
     return _csv_import_state_response(context)
@@ -163,7 +161,7 @@ def csv_import_check(request):
 def csv_import(request):
 
     # Revalidate the current files before running the actual import.
-    context = _validated_csv_import_context(request)
+    context = _validate_csv_import_context(request)
     if isinstance(context, JsonResponse):
         return context
 
@@ -184,13 +182,11 @@ def csv_import(request):
 
     for file in import_state["files"]:
         try:
-            content = GoogleResources.download_file_content(
-                drive_service, file["id"]
-            )
+            content = GoogleResources.download_file_content(drive_service, file["id"])
             parsed_file = CsvParser.parse_csv_content(
                 content,
                 file["name"],
-                expected_month=6,
+                expected_month=int(month),
                 expected_year=int(year),
             )
             parsed_files.append(
@@ -245,6 +241,7 @@ def csv_import(request):
                 sheet_title,
                 GoogleSheetsHelper.HEADERS["employee_headers"],
             )
+            
             imported_rows += GoogleSheetsHelper.replace_employee_entries(
                 sheets_service,
                 spreadsheet,
@@ -456,21 +453,33 @@ def save_setup(request):
         spreadsheet_id = GoogleResources.parse_resource_id(
             payload.get("spreadsheet_id", ""), "spreadsheet"
         )
+        period_month = int(payload.get("period_month", ""))
+        period_year = int(payload.get("period_year", ""))
     except (ValueError, TypeError, json.JSONDecodeError) as error:
-        return JsonResponse({"error": str(error)}, status=400)
+        return JsonResponse(
+            {"error": str(error)},
+            status=400
+        )
+
+    if not 1 <= period_month <= 12:
+        return JsonResponse({"error": "The import month must be between 1 and 12."}, status=400)
+    if not 2000 <= period_year <= 2099:
+        return JsonResponse({"error": "The import year must be between 2000 and 2099."}, status=400)
 
     configuration = WorkspaceConfiguration.objects.filter(owner=request.user).first()
     changed = configuration and (
         configuration.root_folder_id != root_folder_id
         or configuration.spreadsheet_id != spreadsheet_id
+        or configuration.period_month != period_month
+        or configuration.period_year != period_year
     )
     if changed and payload.get("confirmation") != "CHANGE WORKSPACE CONFIG":
         return JsonResponse(
             {
-                "error": "Type CHANGE WORKSPACE CONFIG to confirm this change.",
+                "confirmation_phrase": "CHANGE WORKSPACE CONFIG",
                 "requires_confirmation": True,
             },
-            status=400,
+            status=428,
         )
 
     connection = request.user.google_connection
@@ -497,6 +506,8 @@ def save_setup(request):
         
     configuration.root_folder_id = root_folder_id
     configuration.spreadsheet_id = spreadsheet_id
+    configuration.period_month = period_month
+    configuration.period_year = period_year
     configuration.save()
     
     return JsonResponse(
