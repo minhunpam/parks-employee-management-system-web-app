@@ -7,16 +7,18 @@ from django.conf import settings
 from django.test import SimpleTestCase
 
 # Local modules
-from .google_resources import CsvParser, GoogleResources
+from .google_resources import parse_resource_id
+from .google_oauth import build_services
+from .csv_parser import handle_entries, public_holidays
 
 class ParseResourceIdTests(SimpleTestCase):
        def test_plain_folder_id(self):
-           result = GoogleResources.parse_resource_id("folder123", "folder")
+           result = parse_resource_id("folder123", "folder")
 
            self.assertEqual(result, "folder123")
 
        def test_folder_url(self):
-           result = GoogleResources.parse_resource_id(
+           result = parse_resource_id(
                "https://drive.google.com/drive/folders/folder123?usp=sharing",
                "folder",
            )
@@ -24,7 +26,7 @@ class ParseResourceIdTests(SimpleTestCase):
            self.assertEqual(result, "folder123")
 
        def test_spreadsheet_url(self):
-           result = GoogleResources.parse_resource_id(
+           result = parse_resource_id(
                "https://docs.google.com/spreadsheets/d/sheet456/edit",
                "spreadsheet",
            )
@@ -32,7 +34,7 @@ class ParseResourceIdTests(SimpleTestCase):
            self.assertEqual(result, "sheet456")
 
        def test_url_with_query_id(self):
-           result = GoogleResources.parse_resource_id(
+           result = parse_resource_id(
                "https://drive.google.com/open?id=resource789",
                "folder",
            )
@@ -41,7 +43,7 @@ class ParseResourceIdTests(SimpleTestCase):
 
        def test_empty_value_raises_error(self):
            with self.assertRaises(ValueError):
-               GoogleResources.parse_resource_id("", "folder")
+               parse_resource_id("", "folder")
 
        def test_invalid_url_raises_error(self):
            '''
@@ -49,7 +51,7 @@ class ParseResourceIdTests(SimpleTestCase):
            parsing and fails in the last condition
            '''
            with self.assertRaises(ValueError):
-               GoogleResources.parse_resource_id("https://example.com/file123", "folder")
+               parse_resource_id("https://example.com/file123", "folder")
 
 class CsvParserTests(SimpleTestCase):
     def test_minimum_break_is_added_after_six_hours(self):
@@ -63,7 +65,7 @@ class CsvParserTests(SimpleTestCase):
         '''
 
         
-        result = CsvParser._handle_entries(
+        result = handle_entries(
             {
                 "04.06.2026": [
                     {"start": "06:39", "end": "10:37", "remark": "19=Pause"},
@@ -80,7 +82,7 @@ class CsvParserTests(SimpleTestCase):
         self.assertEqual(result["warnings"], "P6")
 
     def test_zero_duration_pause_marker_is_not_work_time(self):
-        result = CsvParser._handle_entries(
+        result = handle_entries(
             {
                 "10.06.2026": [
                     {"start": "08:29", "end": "12:37", "remark": "18=Dienstschluß"},
@@ -97,28 +99,28 @@ class CsvParserTests(SimpleTestCase):
         self.assertEqual(result["warnings"], "")
 
     def test_missing_date_is_a_free_day(self):
-        result = CsvParser._handle_entries({"01.06.2026": []})["01.06.2026"]
+        result = handle_entries({"01.06.2026": []})["01.06.2026"]
 
         self.assertEqual(result["type_of_day"], "Frei")
         self.assertEqual(result["shift_total_time"], 0)
         self.assertEqual(result["warnings"], "")
 
     def test_public_holiday_is_marked_as_feiertag(self):
-        result = CsvParser._handle_entries(
+        result = handle_entries(
             {"06.04.2026": []},
-            holiday_dates=CsvParser._public_holidays(2026),
+            holiday_dates=public_holidays(2026),
         )["06.04.2026"]
 
         self.assertEqual(result["type_of_day"], "Feiertag")
 
     def test_worked_public_holiday_keeps_shift_data(self):
-        result = CsvParser._handle_entries(
+        result = handle_entries(
             {
                 "06.04.2026": [
                     {"start": "08:00", "end": "12:00", "remark": None},
                 ]
             },
-            holiday_dates=CsvParser._public_holidays(2026),
+            holiday_dates=public_holidays(2026),
         )["06.04.2026"]
 
         self.assertEqual(result["type_of_day"], "Feiertag")
@@ -141,18 +143,18 @@ class BuildGoogleResourcesTests(SimpleTestCase):
         fernet.decrypt.return_value = decrypted_token
 
         with (
-            patch("workspace.google_resources.Fernet", return_value=fernet) as fernet_class,
+            patch("workspace.google_oauth.Fernet", return_value=fernet) as fernet_class,
             patch(
-                "workspace.google_resources.Credentials",
+                "workspace.google_oauth.Credentials",
                 return_value=credentials,
             ) as credentials_class,
-            patch("workspace.google_resources.Request") as request_class,
+            patch("workspace.google_oauth.Request") as request_class,
             patch(
-                "workspace.google_resources.build",
+                "workspace.google_oauth.build",
                 side_effect=[drive_service, sheets_service],
             ) as build_class,
         ):
-            result = GoogleResources.build_services(connection)
+            result = build_services(connection)
 
         self.assertEqual(result, (drive_service, sheets_service))
 

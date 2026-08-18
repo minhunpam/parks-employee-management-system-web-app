@@ -24,16 +24,19 @@ from httplib2 import GoogleLoginAuthentication
 from accounts.google_oauth import build_google_client_config
 from accounts.models import GoogleConnection
 from .models import WorkspaceConfiguration
-from .google_resources import GoogleResources, CsvParser, GoogleSheetsHelper
-from utils.Validator import Validator
-
-
+from .google_resources import parse_resource_id
+from .csv_parser import parse_csv_content
+from utils.validator import (
+    validate_connection_and_configuration,
+    get_validated_workspace_resources,
+    validate_folder_and_spreadsheet_ids
+)
 @login_required
 def entry(request):
     connection = getattr(request.user, "google_connection", None)
     configuration = getattr(request.user, "owned_workspace", None)
 
-    validation_response = Validator.validate_connection_and_configuration(connection, configuration)
+    validation_response = validate_connection_and_configuration(connection, configuration)
     if validation_response is not None:
         return validation_response
     
@@ -57,21 +60,19 @@ def _validate_csv_import_context(request):
     connection = getattr(request.user, "google_connection", None)
     configuration = getattr(request.user, "owned_workspace", None)
 
-    validation_response = Validator.validate_connection_and_configuration(connection, configuration)
+    validation_response = validate_connection_and_configuration(connection, configuration)
     if validation_response is not None:
         return validation_response
 
     try:
-        drive_service, sheets_service, folder, spreadsheet = (
-            Validator.get_validated_workspace_resources(
+        google_drive_client, google_sheets_client, folder, spreadsheet = (
+            get_validated_workspace_resources(
                 connection,
                 configuration.root_folder_id,
                 configuration.spreadsheet_id,
             )
         )
-        import_state = GoogleResources.prepare_csv_import_folder(
-            drive_service, folder["id"], configuration
-        )
+        import_state = google_drive_client.prepare_csv_import_folder(folder["id"], configuration)
     except RefreshError:
         return JsonResponse(
             {
@@ -88,11 +89,11 @@ def _validate_csv_import_context(request):
         return JsonResponse({"error": str(error)}, status=502)
 
     return {
-        "drive_service": drive_service,
-        "sheets_service": sheets_service,
         "folder": folder,
         "spreadsheet": spreadsheet,
         "import_state": import_state,
+        "google_drive_client": google_drive_client,
+        "google_sheets_client": google_sheets_client,
     }
 
 def _csv_import_state_response(context):
@@ -169,8 +170,8 @@ def csv_import(request):
     spreadsheet = context["spreadsheet"]
     spreadsheet_id = spreadsheet["spreadsheetId"]
     
-    drive_service = context["drive_service"]
-    sheets_service = context["sheets_service"]
+    google_drive_client = context["google_drive_client"]
+    google_sheets_client = context["google_sheets_client"]
     
     response = _csv_import_state_response(context)
     if response.status_code != 200:
@@ -182,8 +183,8 @@ def csv_import(request):
 
     for file in import_state["files"]:
         try:
-            content = GoogleResources.download_file_content(drive_service, file["id"])
-            parsed_file = CsvParser.parse_csv_content(
+            content = google_drive_client.download_file_content(file["id"])
+            parsed_file = parse_csv_content(
                 content,
                 file["name"],
                 expected_month=int(month),
@@ -222,28 +223,22 @@ def csv_import(request):
     try:
         for file in parsed_files:
             sheet_title = file["employee"]
-            GoogleSheetsHelper.create_sheet_if_not_exists(
-                sheets_service,
+            google_sheets_client.create_sheet_if_not_exists(
                 spreadsheet,
                 spreadsheet_id,
                 sheet_title,
             )
 
             # Refresh local spreadsheet dictionary
-            spreadsheet = sheets_service.spreadsheets().get(
-                spreadsheetId=spreadsheet_id,
-                fields="spreadsheetId,properties(title),sheets(properties(sheetId,title))",
-            ).execute()
+            spreadsheet = google_sheets_client.validate_spreadsheet(spreadsheet_id)
             
-            GoogleSheetsHelper.setup_sheet_headers_if_not_exists(
-                sheets_service,
+            google_sheets_client.setup_sheet_headers_if_not_exists(
                 spreadsheet_id,
                 sheet_title,
-                GoogleSheetsHelper.HEADERS["employee_headers"],
+                google_sheets_client.HEADERS["employee_headers"],
             )
             
-            imported_rows += GoogleSheetsHelper.replace_employee_entries(
-                sheets_service,
+            imported_rows += google_sheets_client.replace_employee_entries(
                 spreadsheet,
                 spreadsheet_id,
                 sheet_title,
@@ -264,7 +259,7 @@ def csv_import(request):
     archived_files = []
     for file in imported_files:
         try:
-            archived = GoogleSheetsHelper.archive_file(drive_service, file["id"], file["name"],)
+            archived = google_drive_client.archive_file(file["id"], file["name"])
             archived_files.append(archived.get("name", ""))
         except HttpError as error:
             archive_errors.append(
@@ -447,10 +442,10 @@ def save_setup(request):
     
     try:
         payload = json.loads(request.body)
-        root_folder_id = GoogleResources.parse_resource_id(
+        root_folder_id = parse_resource_id(
             payload.get("root_folder_id", ""), "folder"
         )
-        spreadsheet_id = GoogleResources.parse_resource_id(
+        spreadsheet_id = parse_resource_id(
             payload.get("spreadsheet_id", ""), "spreadsheet"
         )
         period_month = int(payload.get("period_month", ""))
@@ -486,7 +481,7 @@ def save_setup(request):
     if not connection:
         return redirect("workspace:connect")
     
-    response = Validator.validate_folder_and_spreadsheet_ids(connection, root_folder_id, spreadsheet_id)
+    response = validate_folder_and_spreadsheet_ids(connection, root_folder_id, spreadsheet_id)
     response_data = json.loads(response.content)
     
     if response.status_code != 200:
