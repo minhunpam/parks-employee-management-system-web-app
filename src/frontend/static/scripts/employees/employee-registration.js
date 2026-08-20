@@ -76,6 +76,7 @@ async function registerEmployee(payload) {
 }
 
 form.addEventListener("submit", async (event) => {
+  console.log("Hello world!");
   event.preventDefault();
 
   const payload = Object.fromEntries(new FormData(form));

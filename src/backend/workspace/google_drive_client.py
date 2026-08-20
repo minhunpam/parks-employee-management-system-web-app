@@ -3,17 +3,20 @@ import io
 import re
 from typing import ClassVar
 
+# Django modules
+from django.core.exceptions import ObjectDoesNotExist
+
 # Google modules
 from googleapiclient.http import MediaIoBaseDownload
 
 # Local modules
 from .models import WorkspaceConfiguration
-
+from employees.models import Employee
 
 class GoogleDriveClient:
     IMPORT_FOLDER_NAME: ClassVar[str] = "Import"
     CSV_FILENAME_URL_REGEX_PATTERN: ClassVar[re.Pattern] = re.compile(
-        r"^Schicht_(?P<employee_name>.+)_(?P<month>[^_]+)_(?P<year>20\d{2})\.csv$"
+        r"^Schicht_(?P<employee_firstname>.+)_(?P<month>[^_]+)_(?P<year>20\d{2})\.csv$"
     )
     GERMAN_MONTHS: ClassVar[tuple[str, ...]] = (
         "Januar", "Februar", "März", "April", "Mai", "Juni",
@@ -40,8 +43,15 @@ class GoogleDriveClient:
 
         invalid_files = []
         valid_files = []
+        not_employee_list = []
         for item in files:
             match = re.fullmatch(self.CSV_FILENAME_URL_REGEX_PATTERN, item.get("name", ""))
+            employee_firstname = match.group("employee_firstname")
+            try:
+                employee = Employee.objects.get(first_name__iexact=employee_firstname)
+            except ObjectDoesNotExist:
+                not_employee_list.append(employee_firstname)
+            
             if (
                 not match
                 or match.group("month") != german_month
@@ -50,6 +60,10 @@ class GoogleDriveClient:
                 invalid_files.append(item.get("name", ""))
             else:
                 valid_files.append(item)
+
+        if not_employee_list:
+            raise ValueError(f"This is the list of employee(s) who has/have been the offical staff {not_employee_list}. "
+                "Please check again and register them before importing their data")
 
         return {
             "import_folder": import_folder,
