@@ -101,20 +101,35 @@ class EmployeeMonth(models.Model):
     year = models.PositiveIntegerField(default=current_year)
     month = models.PositiveIntegerField(default=current_month)
 
-    opening_hour_account_balance = models.IntegerField(default=0)
+    opening_hour_account_balance = models.DecimalField(max_digits=8,
+        decimal_places=2,
+        default=0,
+    )
     target_working_hours = models.DecimalField(
-        max_digits=6,
+        max_digits=8,
         decimal_places=2,
     )
-    paid_absence_hours = models.PositiveIntegerField(default=0)
-    worked_hours = models.PositiveIntegerField(default=0)
-    credited_working_hours = models.PositiveIntegerField(default=0)
+    paid_absence_hours = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=0,
+    )
+    worked_hours = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=0,
+    )
+    credited_working_hours = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=0,
+    )
     hour_difference = models.DecimalField(
-        max_digits=6,
+        max_digits=8,
         decimal_places=2,
     )
     closing_hour_account_balance = models.DecimalField(
-        max_digits=6,
+        max_digits=8,
         decimal_places=2,
     )
     opening_vacation_balance = models.PositiveIntegerField(default=ANNUAL_ALLOWED_VACATION_DAYS)

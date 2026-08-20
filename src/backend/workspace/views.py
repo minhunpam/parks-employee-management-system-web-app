@@ -18,7 +18,6 @@ from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import Flow
 from google.oauth2 import id_token
 from googleapiclient.errors import HttpError
-from httplib2 import GoogleLoginAuthentication
 
 # Local modules
 from accounts.google_oauth import build_google_client_config
@@ -31,6 +30,9 @@ from utils.validator import (
     get_validated_workspace_resources,
     validate_folder_and_spreadsheet_ids
 )
+from .google_drive_client import GoogleDriveClient
+from .google_sheets_client import GoogleSheetsClient
+
 @login_required
 def entry(request):
     connection = getattr(request.user, "google_connection", None)
@@ -170,8 +172,8 @@ def csv_import(request):
     spreadsheet = context["spreadsheet"]
     spreadsheet_id = spreadsheet["spreadsheetId"]
     
-    google_drive_client = context["google_drive_client"]
-    google_sheets_client = context["google_sheets_client"]
+    google_drive_client: GoogleDriveClient = context["google_drive_client"]
+    google_sheets_client: GoogleSheetsClient = context["google_sheets_client"]
     
     response = _csv_import_state_response(context)
     if response.status_code != 200:
@@ -223,11 +225,7 @@ def csv_import(request):
     try:
         for file in parsed_files:
             sheet_title = file["employee"]
-            google_sheets_client.create_sheet_if_not_exists(
-                spreadsheet,
-                spreadsheet_id,
-                sheet_title,
-            )
+            google_sheets_client.create_sheet_if_not_exists(spreadsheet, spreadsheet_id, sheet_title,)
 
             # Refresh local spreadsheet dictionary
             spreadsheet = google_sheets_client.validate_spreadsheet(spreadsheet_id)
@@ -244,6 +242,7 @@ def csv_import(request):
                 sheet_title,
                 file["entries"],
             )
+            
             imported_files.append(file)
     except HttpError as error:
         return JsonResponse(

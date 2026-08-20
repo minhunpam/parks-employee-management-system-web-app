@@ -96,7 +96,7 @@ employee sheet + date
   Managed by PARKS. Use the application to add or correct entries.
   ```
 
-> This protection is a safeguard and a reminder, not an absolute security boundary. The spreadsheet owner can remove or change protection and may be able to edit protected content directly. The application should therefore present PARKS as the intended editing surface while allowing the owner to retain control of the spreadsheet.
+> **This protection is a safeguard and a reminder, not an absolute security boundary. The spreadsheet owner can remove or change protection and may be able to edit protected content directly. The application should therefore present PARKS as the intended editing surface while allowing the owner to retain control of the spreadsheet.**
 
 The Monthly overview sheet should also be treated as view-only through PARKS. The application does not provide direct cell editing for any sheet.
 

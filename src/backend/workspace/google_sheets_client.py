@@ -1,11 +1,16 @@
 # Built-in modules
 import re
+from decimal import Decimal, InvalidOperation
 from typing import ClassVar
 from datetime import datetime
 import calendar
 
+# Django modules
+from django.db import transaction
+
 # Local modules
 from .csv_parser import time_to_minutes
+from employees.models import Employee, EmployeeMonth, EmployeeYear
 
 class GoogleSheetsClient:
     HEADERS: ClassVar[dict[str, list[str]]] = {
@@ -217,6 +222,7 @@ class GoogleSheetsClient:
             rows,
             data_row_count,
         ))
+        requests.extend(GoogleSheetsClient._protect_whole_sheet(spreadsheet, sheet_title))
         
         if requests:
             self.sheets_service.spreadsheets().batchUpdate(
@@ -225,15 +231,154 @@ class GoogleSheetsClient:
                     "requests": requests
                 },
             ).execute()
+
+
+        self._update_employee_summaries(sheet_title, rows)
         
         return len(imported_rows)
+
+    @staticmethod
+    def _normalize_employee_name(value):
+        return " ".join(str(value or "").split()).casefold()
+
+    @classmethod
+    def _find_employee_for_sheet(cls, sheet_title):
+        normalized_title = cls._normalize_employee_name(sheet_title)
+        employees = [
+            employee for employee in Employee.objects.all()
+            if normalized_title in {
+                cls._normalize_employee_name(employee.first_name),
+                cls._normalize_employee_name(f"{employee.first_name} {employee.last_name}"),
+            }
+        ]
+
+        if not employees:
+            raise ValueError(f"No application employee matches spreadsheet sheet '{sheet_title}'.")
+        if len(employees) > 1:
+            raise ValueError(f"Spreadsheet sheet '{sheet_title}' matches multiple employees.")
+        return employees[0]
+
+    @staticmethod
+    def _decimal_cell_value(row, index):
+        try:
+            return Decimal(str(row[index] or "0")).quantize(Decimal("0.01"))
+        except (IndexError, InvalidOperation, TypeError, ValueError):
+            return Decimal("0.00")
+
+    @classmethod
+    def _summarize_rows(cls, rows):
+        paid_absence_types = {
+            "Urlaub",
+            "Krankenstand",
+            "Feiertag",
+            "Feiertag bezahlt",
+        }
+        worked_hours = Decimal("0.00")
+        paid_absence_hours = Decimal("0.00")
+        vacation_days_used = 0
+
+        for row in rows:
+            if not row or not row[0]:
+                continue
+                
+            hours = cls._decimal_cell_value(row, 6)
+            entry_type = str(row[7] if len(row) > 7 else "").strip()
+            if entry_type in paid_absence_types:
+                paid_absence_hours += hours
+            else:
+                worked_hours += hours
+            if entry_type == "Urlaub":
+                vacation_days_used += 1
+
+        return {
+            "worked_hours": worked_hours,
+            "paid_absence_hours": paid_absence_hours,
+            "vacation_days_used": vacation_days_used,
+        }
+
+    @classmethod
+    def _update_employee_summaries(cls, sheet_title, rows):
+        employee = cls._find_employee_for_sheet(sheet_title)
+        dated_rows = [
+            row 
+            for row in rows if row and row[0]
+        ]
+        if not dated_rows:
+            return
+
+        dates = [datetime.strptime(row[0], "%d.%m.%Y").date() for row in dated_rows]
+        year = dates[0].year
+        month = dates[0].month
+        
+    
+        summary = cls._summarize_rows(rows)
+        with transaction.atomic():
+            employee_year, _ = EmployeeYear.objects.get_or_create(
+                employee=employee,
+                year=year,
+            )
+            previous_month = (
+                EmployeeMonth.objects.filter(employee=employee)
+                .filter(year__lt=year)
+                .order_by("-year", "-month")
+                .first()
+            )
+            same_year_previous_month = (
+                EmployeeMonth.objects.filter(
+                    employee=employee,
+                    year=year,
+                    month__lt=month,
+                )
+                .order_by("-month")
+                .first()
+            )
+            previous_month = same_year_previous_month or previous_month
+
+            opening_hour_balance = (
+                previous_month.closing_hour_account_balance
+                if previous_month
+                else Decimal("0.00")
+            )
+            opening_vacation_balance = (
+                previous_month.closing_vacation_balance
+                if previous_month
+                else employee_year.annual_allowed_vacation_days
+                + employee_year.carried_over_vacation_days
+            )
+
+            EmployeeMonth.objects.update_or_create(
+                employee=employee,
+                year=year,
+                month=month,
+                defaults={
+                    "opening_hour_account_balance": opening_hour_balance,
+                    "target_working_hours": employee.monthly_target_hours,
+                    "paid_absence_hours": summary["paid_absence_hours"],
+                    "worked_hours": summary["worked_hours"],
+                    "opening_vacation_balance": opening_vacation_balance,
+                    "vacation_days_used": summary["vacation_days_used"],
+                },
+            )
+
+            used_vacation_days = sum(
+                record.vacation_days_used
+                for record in EmployeeMonth.objects.filter(
+                    employee=employee,
+                    year=year,
+                )
+            )
+            employee_year.vacation_balance = (
+                employee_year.annual_allowed_vacation_days
+                + employee_year.carried_over_vacation_days
+                - used_vacation_days
+            )
+            employee_year.save(update_fields=["vacation_balance", "updated_at"])
 
     @staticmethod
     def _format_public_holiday_rows(spreadsheet, sheet_title, rows, data_row_count,):
         """Highlight public-holiday rows with Google Sheets' light red 3."""
         current_sheet = GoogleSheetsClient.get_sheet(spreadsheet, sheet_title)
         if not current_sheet or data_row_count <= 0:
-            print("2")
             return []
 
         sheet_id = current_sheet["properties"]["sheetId"]
@@ -300,7 +445,6 @@ class GoogleSheetsClient:
         current_sheet = GoogleSheetsClient.get_sheet(spreadsheet, sheet_title)
         requests = []
         if not current_sheet or data_row_count <= 0:
-            print("1");
             return requests
 
         sheet_id = current_sheet["properties"]["sheetId"]
@@ -338,5 +482,30 @@ class GoogleSheetsClient:
                     }
                 }
             )
+
+        return requests
+
+    @staticmethod
+    def _protect_whole_sheet(spreadsheet, sheet_title):
+        current_sheet = GoogleSheetsClient.get_sheet(spreadsheet, sheet_title)
+        requests = []
+        if not current_sheet:
+            return requests
+
+        sheet_id = current_sheet["properties"]["sheetId"]
+
+        requests.append(
+            {
+                "addProtectedRange": {
+                    "protectedRange": {
+                        "range": {
+                            "sheetId": sheet_id,
+                        },
+                        "description": "Managed by PARKS. Use the application to add or correct entries.",
+                        "warningOnly": True
+                    }
+                }
+            }
+        )
 
         return requests
