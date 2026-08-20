@@ -518,3 +518,10 @@ def save_setup(request):
         status=200,
     )
 
+@login_required
+def sheets_preview(request):
+    return render(
+        request,
+        "workspace/sheets-preview.html"
+    )
+    
