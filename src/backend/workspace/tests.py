@@ -4,12 +4,15 @@ from unittest.mock import Mock, patch
 
 # Django modules
 from django.conf import settings
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
+from decimal import Decimal
 
 # Local modules
 from .google_resources import parse_resource_id
 from .google_oauth import build_services
 from .csv_parser import handle_entries, public_holidays
+from .google_sheets_client import GoogleSheetsClient
+from employees.models import Employee, EmployeeMonth, EmployeeYear
 
 class ParseResourceIdTests(SimpleTestCase):
        def test_plain_folder_id(self):
@@ -126,6 +129,110 @@ class CsvParserTests(SimpleTestCase):
         self.assertEqual(result["type_of_day"], "Feiertag")
         self.assertEqual(result["shift_start"], "08:00")
         self.assertEqual(result["shift_end"], "12:00")
+
+
+class GoogleSheetsSummaryPropagationTests(TestCase):
+    def setUp(self):
+        self.employee = Employee.objects.create(
+            first_name="Ademir",
+            last_name="Test",
+            email="ademir.test@example.com",
+            employment_start_date="2026-01-01",
+            monthly_target_hours=Decimal("173.00"),
+        )
+        self.year_2026 = EmployeeYear.objects.create(
+            employee=self.employee,
+            year=2026,
+            annual_allowed_vacation_days=25,
+            carried_over_vacation_days=2,
+        )
+        self.year_2027 = EmployeeYear.objects.create(
+            employee=self.employee,
+            year=2027,
+            annual_allowed_vacation_days=25,
+            carried_over_vacation_days=0,
+        )
+
+        self.november = EmployeeMonth.objects.create(
+            employee=self.employee,
+            year=2026,
+            month=11,
+            opening_hour_account_balance=Decimal("0.00"),
+            target_working_hours=Decimal("173.00"),
+            paid_absence_hours=Decimal("0.00"),
+            worked_hours=Decimal("176.00"),
+            opening_vacation_balance=Decimal("23.00"),
+            vacation_days_used=3,
+        )
+        self.january = EmployeeMonth.objects.create(
+            employee=self.employee,
+            year=2027,
+            month=1,
+            opening_hour_account_balance=Decimal("0.00"),
+            target_working_hours=Decimal("173.00"),
+            paid_absence_hours=Decimal("0.00"),
+            worked_hours=Decimal("160.00"),
+            opening_vacation_balance=22,
+            vacation_days_used=2,
+        )
+
+    def test_imported_december_updates_previous_and_later_balance_chain(self):
+        sheets_service = Mock()
+        client = GoogleSheetsClient(sheets_service)
+        spreadsheet = {
+            "sheets": [{"properties": {"sheetId": 123, "title": "Ademir"}}],
+        }
+        existing_december_rows = [
+            ["01.12.2026", "08:00", "", "", "16:30", "30", "8.00", "Arbeit", ""],
+            ["02.12.2026", "", "", "", "", "", "Frei", ""],
+        ]
+        imported_entries = {
+            "02.12.2026": {
+                "shift_start": "",
+                "pause_start": "",
+                "pause_end": "",
+                "shift_end": "",
+                "pause_minutes": 0,
+                "shift_total_time": 8.00,
+                "type_of_day": "Urlaub",
+                "warnings": "",
+            },
+        }
+
+        with patch.object(client, "read_sheet_values", return_value=existing_december_rows):
+            client.replace_employee_entries(
+                spreadsheet,
+                "spreadsheet-id",
+                "Ademir",
+                imported_entries,
+            )
+
+        december = EmployeeMonth.objects.get(
+            employee=self.employee,
+            year=2026,
+            month=12,
+        )
+        january = EmployeeMonth.objects.get(
+            employee=self.employee,
+            year=2027,
+            month=1,
+        )
+        self.year_2026.refresh_from_db()
+        self.year_2027.refresh_from_db()
+
+        self.assertEqual(december.opening_hour_account_balance, Decimal("3.00"))
+        self.assertEqual(december.worked_hours, Decimal("8.00"))
+        self.assertEqual(december.paid_absence_hours, Decimal("8.00"))
+        self.assertEqual(december.vacation_days_used, 1)
+        self.assertEqual(december.opening_vacation_balance, Decimal("20.00"))
+        self.assertEqual(december.closing_vacation_balance, Decimal("19.00"))
+
+        self.assertEqual(january.opening_hour_account_balance, december.closing_hour_account_balance)
+        self.assertEqual(january.opening_vacation_balance, Decimal("44.00"))
+        self.assertEqual(january.closing_vacation_balance, Decimal("42.00"))
+        self.assertEqual(self.year_2026.vacation_balance, 23)
+        self.assertEqual(self.year_2027.carried_over_vacation_days, 19)
+        self.assertEqual(self.year_2027.vacation_balance, 42)
 
 
 class BuildGoogleResourcesTests(SimpleTestCase):

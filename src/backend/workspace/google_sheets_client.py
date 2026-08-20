@@ -7,6 +7,7 @@ import calendar
 
 # Django modules
 from django.db import transaction
+from django.db.models import Q
 
 # Local modules
 from .csv_parser import time_to_minutes
@@ -285,14 +286,12 @@ class GoogleSheetsClient:
             entry_type = str(row[7] if len(row) > 7 else "").strip()
             entry_warnings = row[8].split(",")
             
-            if entry_type in paid_absence_types:
-                if not "Feiertag-Arbeit" in entry_warnings:
+            if entry_type in paid_absence_types and not "Feiertag-Arbeit" in entry_warnings:
                     paid_absence_hours += hours
-            else:
-                worked_hours += hours
+            worked_hours += hours
                 
             if entry_type == "Urlaub":
-                vacation_days_used += 1
+                vacation_days_used += 1 
 
         return {
             "worked_hours": worked_hours,
@@ -312,15 +311,13 @@ class GoogleSheetsClient:
 
         dates = [datetime.strptime(row[0], "%d.%m.%Y").date() for row in dated_rows]
         year = dates[0].year
-        month = dates[0].month
+        current_month = dates[0].month
         
     
         summary = cls._summarize_rows(rows)
         with transaction.atomic():
-            employee_year, _ = EmployeeYear.objects.get_or_create(
-                employee=employee,
-                year=year,
-            )
+            employee_year, _ = EmployeeYear.objects.get_or_create(employee=employee, year=year, )
+            
             previous_month = (
                 EmployeeMonth.objects.filter(employee=employee)
                 .filter(year__lt=year)
@@ -331,13 +328,13 @@ class GoogleSheetsClient:
                 EmployeeMonth.objects.filter(
                     employee=employee,
                     year=year,
-                    month__lt=month,
+                    month__lt=current_month,
                 )
                 .order_by("-month")
                 .first()
             )
             previous_month = same_year_previous_month or previous_month
-
+            
             opening_hour_balance = (
                 previous_month.closing_hour_account_balance
                 if previous_month
@@ -349,14 +346,10 @@ class GoogleSheetsClient:
                 else employee_year.annual_allowed_vacation_days + employee_year.carried_over_vacation_days
             )
 
-
-            
-            
-
-            EmployeeMonth.objects.update_or_create(
+            updated_month, _ = EmployeeMonth.objects.update_or_create(
                 employee=employee,
                 year=year,
-                month=month,
+                month=current_month,
                 defaults={
                     "opening_hour_account_balance": opening_hour_balance,
                     "target_working_hours": employee.monthly_target_hours,
@@ -367,19 +360,57 @@ class GoogleSheetsClient:
                 },
             )
 
-            used_vacation_days = sum(
-                record.vacation_days_used
-                for record in EmployeeMonth.objects.filter(
+            later_months = list(
+                EmployeeMonth.objects.filter(
+                    Q(year__gt=year) | Q(year=year, month__gt=current_month),
                     employee=employee,
-                    year=year,
+                ).order_by("year", "month")
+            )
+            affected_years = {year} | {month_record.year for month_record in later_months}
+
+            hour_balance = updated_month.closing_hour_account_balance
+            vacation_balance = updated_month.closing_vacation_balance
+            previous_month = updated_month
+            
+            for month_record in later_months:
+                month_record.opening_hour_account_balance = hour_balance
+                if month_record.year != previous_month.year:
+                    later_year, _ = EmployeeYear.objects.get_or_create(
+                        employee=employee,
+                        year=month_record.year,
+                    )
+                    later_year.carried_over_vacation_days = vacation_balance
+                    later_year.save(update_fields=["carried_over_vacation_days","updated_at",])
+                    vacation_balance = (
+                        later_year.annual_allowed_vacation_days
+                        + later_year.carried_over_vacation_days
+                    )
+
+                month_record.opening_vacation_balance = vacation_balance
+                month_record.save()
+
+                hour_balance = month_record.closing_hour_account_balance
+                vacation_balance = month_record.closing_vacation_balance
+                previous_month = month_record
+
+            for affected_year in affected_years:
+                year_record, _ = EmployeeYear.objects.get_or_create(
+                    employee=employee,
+                    year=affected_year,
                 )
-            )
-            employee_year.vacation_balance = (
-                employee_year.annual_allowed_vacation_days
-                + employee_year.carried_over_vacation_days
-                - used_vacation_days
-            )
-            employee_year.save(update_fields=["vacation_balance", "updated_at"])
+                used_vacation_days = sum(
+                    record.vacation_days_used
+                    for record in EmployeeMonth.objects.filter(
+                        employee=employee,
+                        year=affected_year,
+                    )
+                )
+                year_record.vacation_balance = (
+                    year_record.annual_allowed_vacation_days
+                    + year_record.carried_over_vacation_days
+                    - used_vacation_days
+                )
+                year_record.save(update_fields=["vacation_balance", "updated_at"])
 
     @staticmethod
     def _format_public_holiday_rows(spreadsheet, sheet_title, rows, data_row_count,):
