@@ -283,10 +283,14 @@ class GoogleSheetsClient:
                 
             hours = cls._decimal_cell_value(row, 6)
             entry_type = str(row[7] if len(row) > 7 else "").strip()
+            entry_warnings = row[8].split(",")
+            
             if entry_type in paid_absence_types:
-                paid_absence_hours += hours
+                if not "Feiertag-Arbeit" in entry_warnings:
+                    paid_absence_hours += hours
             else:
                 worked_hours += hours
+                
             if entry_type == "Urlaub":
                 vacation_days_used += 1
 
@@ -342,9 +346,12 @@ class GoogleSheetsClient:
             opening_vacation_balance = (
                 previous_month.closing_vacation_balance
                 if previous_month
-                else employee_year.annual_allowed_vacation_days
-                + employee_year.carried_over_vacation_days
+                else employee_year.annual_allowed_vacation_days + employee_year.carried_over_vacation_days
             )
+
+
+            
+            
 
             EmployeeMonth.objects.update_or_create(
                 employee=employee,
@@ -376,7 +383,10 @@ class GoogleSheetsClient:
 
     @staticmethod
     def _format_public_holiday_rows(spreadsheet, sheet_title, rows, data_row_count,):
-        """Highlight public-holiday rows with Google Sheets' light red 3."""
+        """
+            Highlight public-holiday rows with Google Sheets' light red 3.
+        """
+        
         current_sheet = GoogleSheetsClient.get_sheet(spreadsheet, sheet_title)
         if not current_sheet or data_row_count <= 0:
             return []

@@ -227,8 +227,9 @@ def handle_entries(
             warnings.append("P6")
 
         
-        if is_public_holiday:
+        if is_public_holiday and working_minutes != 0:
             working_minutes *= 2
+            warnings.append("Feiertag-Arbeit")
         
         resulted_entries[working_date] = {
             "shift_start": shift_start,
