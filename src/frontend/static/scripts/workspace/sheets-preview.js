@@ -129,19 +129,21 @@ function renderEmployee(employeeId) {
   openEmployeeSheetLink.classList.toggle("pointer-events-none", openEmployeeSheetLink.href === "#");
 
   employeeTableHead.innerHTML =
-    `<tr>${["Date", "Start", "Break", "End", "Total", "Type", "Warnings", "Actions"].map((header) =>
+    `<tr>${["Date", "Shift start", "Pause start", "Pause end", "Shift end", "Pause time", "Shift total time", "Type", "Warnings", "Actions"].map((header) =>
       `<th scope="col" class="border-b border-[#cccccc] px-4 py-4 font-bold">${header}</th>`).join("")}
     </tr>`;
   
   employeeTableBody.innerHTML = employee.rows.map((row, index) => `
     <tr class="border-b border-[#cccccc] last:border-0 hover:bg-[#f7f7f7]">
         <th scope="row" class="px-4 py-4 font-bold">${htmlInjectionProtection(row.date)}</th>
-        <td class="px-4 py-4">${htmlInjectionProtection(row.start)}</td>
-        <td class="px-4 py-4">${htmlInjectionProtection(row.pause)}</td>
-        <td class="px-4 py-4">${htmlInjectionProtection(row.end)}</td>
-        <td class="px-4 py-4">${htmlInjectionProtection(row.total)}</td>
+        <td class="px-2 py-4">${htmlInjectionProtection(row.shiftStart)}</td>
+        <td class="px-4 py-4">${htmlInjectionProtection(row.pauseStart)}</td>
+        <td class="px-4 py-4">${htmlInjectionProtection(row.pauseEnd)}</td>
+        <td class="px-4 py-4">${htmlInjectionProtection(row.shiftEnd)}</td>
+        <td class="px-4 py-4">${htmlInjectionProtection(row.pauseTime)}</td>
+        <td class="px-4 py-4">${htmlInjectionProtection(row.shiftTotalTime)}</td>
         <td class="px-4 py-4">${htmlInjectionProtection(row.type)}</td>
-        <td class="px-4 py-4 ${row.warning !== "—" ? "font-bold text-[#df6500]" : "text-[#757575]"}">${htmlInjectionProtection(row.warning)}</td>
+        <td class="px-4 py-4 ${row.warnings !== "—" ? "font-bold text-[#df6500]" : "text-[#757575]"}">${htmlInjectionProtection(row.warnings)}</td>
         
         <td class="px-4 py-4">
           <button type="button" data-row-index="${index}" class="correct-entry whitespace-nowrap text-sm font-bold text-[#0046a4] underline hover:text-black focus:outline-none focus:ring-2 focus:ring-[#76b900]">
@@ -155,9 +157,9 @@ function renderEmployee(employeeId) {
   detailSection.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function setLoadedData(data, externalChange = false) {
+function setLoadedData(data, externalChange = false) {  
   state.overview = data;
-  document.querySelector("#period-title").textContent = data.period || "Configured month";
+  document.querySelector("#period-title").textContent = data.configuration_period || "Configured month";
   openSheetsLink.href = data.spreadsheetUrl || "#";
   openSheetsLink.classList.toggle("pointer-events-none", openSheetsLink.href === "#");
   
@@ -167,40 +169,41 @@ function setLoadedData(data, externalChange = false) {
   if (state.selectedEmployee) {
     renderEmployee(state.selectedEmployee);
   }
-  
   syncStatus.textContent = `Loaded from Google Sheets · ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
   
   externalChangeNotice.hidden = !externalChange;
 }
 
-async function loadData() {
+async function loadData({ refresh = false } = {}) {
   syncStatus.textContent = "Loading spreadsheet data…";
-  document.querySelector("#refresh-preview").disabled = true;
+  document.querySelector("#refresh-preview-button").disabled = true;
   
   try {
-    if (!overviewUrl) {
+    
+    if (!overviewUrl && !refreshUrl) {
         setLoadedData(mockData);
         syncStatus.textContent = "Preview UI is using sample data until the backend endpoint is connected.";
         return;
     }
-    
-    const response = await fetch(refreshUrl || overviewUrl, {
+
+    const dataUrl = refresh ? refreshUrl || overviewUrl : overviewUrl || refreshUrl;
+
+    const response = await fetch(dataUrl, {
       headers: {
         Accept: "application/json"
       }
     });
     
-    if (!response.ok) {
-      throw new Error("Spreadsheet data could not be loaded.");
+    const payload = await response.json();
+    if (response.ok) {
+      setLoadedData(payload.data || payload, Boolean(payload.external_change));
     }
     
-    const payload = await response.json();
-    setLoadedData(payload.data || payload, Boolean(payload.external_change));
+    syncStatus.textContent = payload.error;
   } catch (error) {
-    syncStatus.textContent = error.message;
     tableStatus.textContent = "Unable to load spreadsheet data.";
   } finally {
-    document.querySelector("#refresh-preview").disabled = false;
+    document.querySelector("#refresh-preview-button").disabled = false;
   }
 }
 
@@ -261,7 +264,8 @@ async function submitEntry(event) {
   }
 }
 
-document.querySelector("#refresh-preview").addEventListener("click", loadData);
+document.querySelector("#refresh-preview-button").addEventListener("click", () => loadData({refresh: true}));
+
 employeeSearch.addEventListener("input", () => {
     state.filter = employeeSearch.value.trim();
     renderOverview();

@@ -57,7 +57,6 @@ class GoogleSheetsClient:
     def has_sheet(spreadsheet, sheet_title):
         return GoogleSheetsClient.get_sheet(spreadsheet, sheet_title) is not None
 
-
     def create_sheet_if_not_exists(self, spreadsheet, spreadsheet_id, sheet_title):
         existing_sheet = GoogleSheetsClient.get_sheet(spreadsheet, sheet_title)
         if existing_sheet is not None:
@@ -211,18 +210,8 @@ class GoogleSheetsClient:
         data_row_count = max(len(existing_rows), len(rows))
         
         requests = []
-        requests.extend(GoogleSheetsClient._create_week_borders(
-            spreadsheet,
-            sheet_title,
-            sunday_row_indices,
-            data_row_count,
-        ))
-        requests.extend(GoogleSheetsClient._format_public_holiday_rows(
-            spreadsheet,
-            sheet_title,
-            rows,
-            data_row_count,
-        ))
+        requests.extend(GoogleSheetsClient._create_week_borders(spreadsheet, sheet_title, sunday_row_indices, data_row_count,))
+        requests.extend(GoogleSheetsClient._format_public_holiday_rows(spreadsheet, sheet_title, rows, data_row_count,))
         requests.extend(GoogleSheetsClient._protect_whole_sheet(spreadsheet, sheet_title))
         
         if requests:
@@ -254,9 +243,14 @@ class GoogleSheetsClient:
         ]
 
         if not employees:
-            raise ValueError(f"No application employee matches spreadsheet sheet '{sheet_title}'.")
+            raise ValueError(
+                f"There is a sheet, named '{sheet_title}', that doesn't seem to be an employee. "
+                "Please check that manually in the configured spreadsheet! "
+                "A suggested way to delete that sheet manually."
+            )
         if len(employees) > 1:
             raise ValueError(f"Spreadsheet sheet '{sheet_title}' matches multiple employees.")
+            
         return employees[0]
 
     @staticmethod
@@ -268,12 +262,8 @@ class GoogleSheetsClient:
 
     @classmethod
     def _summarize_rows(cls, rows):
-        paid_absence_types = {
-            "Urlaub",
-            "Krankenstand",
-            "Feiertag",
-            "Feiertag bezahlt",
-        }
+        paid_absence_types = {"Urlaub", "Krankenstand", "Feiertag", "Feiertag bezahlt",}
+        
         worked_hours = Decimal("0.00")
         paid_absence_hours = Decimal("0.00")
         vacation_days_used = 0
@@ -284,7 +274,7 @@ class GoogleSheetsClient:
                 
             hours = cls._decimal_cell_value(row, 6)
             entry_type = str(row[7] if len(row) > 7 else "").strip()
-            entry_warnings = row[8].split(",")
+            entry_warnings = str(row[8] if len(row) > 8 else "").split(",")
             
             if entry_type in paid_absence_types and not "Feiertag-Arbeit" in entry_warnings:
                     paid_absence_hours += hours
@@ -300,56 +290,60 @@ class GoogleSheetsClient:
         }
 
     @classmethod
-    def _update_employee_summaries(cls, sheet_title, rows):
+    def _update_employee_summaries(cls, sheet_title, rows, year=None, month=None):
         employee = cls._find_employee_for_sheet(sheet_title)
         dated_rows = [
             row 
             for row in rows if row and row[0]
         ]
-        if not dated_rows:
-            return
 
-        dates = [datetime.strptime(row[0], "%d.%m.%Y").date() for row in dated_rows]
-        year = dates[0].year
-        current_month = dates[0].month
+        if dated_rows:
+            dates = [datetime.strptime(row[0], "%d.%m.%Y").date() for row in dated_rows]
+            target_month = dates[0].month
+            target_year = dates[0].year
+        elif year is not None and month is not None:
+            target_month = month
+            target_year = year
+        else:
+            return
         
-    
         summary = cls._summarize_rows(rows)
+        
         with transaction.atomic():
-            employee_year, _ = EmployeeYear.objects.get_or_create(employee=employee, year=year, )
+            employee_year, _ = EmployeeYear.objects.get_or_create(employee=employee, year=target_year, )
             
-            previous_month = (
+            nearest_previous_month = (
                 EmployeeMonth.objects.filter(employee=employee)
-                .filter(year__lt=year)
+                .filter(year__lt=target_year)
                 .order_by("-year", "-month")
                 .first()
             )
-            same_year_previous_month = (
+            same_year_nearest_previous_month = (
                 EmployeeMonth.objects.filter(
                     employee=employee,
-                    year=year,
-                    month__lt=current_month,
+                    year=target_year,
+                    month__lt=target_month,
                 )
                 .order_by("-month")
                 .first()
             )
-            previous_month = same_year_previous_month or previous_month
+            nearest_previous_month = same_year_nearest_previous_month or nearest_previous_month
             
             opening_hour_balance = (
-                previous_month.closing_hour_account_balance
-                if previous_month
+                nearest_previous_month.closing_hour_account_balance
+                if nearest_previous_month
                 else Decimal("0.00")
             )
             opening_vacation_balance = (
-                previous_month.closing_vacation_balance
-                if previous_month
+                nearest_previous_month.closing_vacation_balance
+                if nearest_previous_month
                 else employee_year.annual_allowed_vacation_days + employee_year.carried_over_vacation_days
             )
 
             updated_month, _ = EmployeeMonth.objects.update_or_create(
                 employee=employee,
-                year=year,
-                month=current_month,
+                year=target_year,
+                month=target_month,
                 defaults={
                     "opening_hour_account_balance": opening_hour_balance,
                     "target_working_hours": employee.monthly_target_hours,
@@ -362,19 +356,19 @@ class GoogleSheetsClient:
 
             later_months = list(
                 EmployeeMonth.objects.filter(
-                    Q(year__gt=year) | Q(year=year, month__gt=current_month),
+                    Q(year__gt=target_year) | Q(year=target_year, month__gt=target_month),
                     employee=employee,
                 ).order_by("year", "month")
             )
-            affected_years = {year} | {month_record.year for month_record in later_months}
+            affected_years = {target_year} | {month_record.year for month_record in later_months}
 
             hour_balance = updated_month.closing_hour_account_balance
             vacation_balance = updated_month.closing_vacation_balance
-            previous_month = updated_month
+            nearest_previous_month = updated_month
             
             for month_record in later_months:
                 month_record.opening_hour_account_balance = hour_balance
-                if month_record.year != previous_month.year:
+                if month_record.year != nearest_previous_month.year:
                     later_year, _ = EmployeeYear.objects.get_or_create(
                         employee=employee,
                         year=month_record.year,
@@ -391,7 +385,7 @@ class GoogleSheetsClient:
 
                 hour_balance = month_record.closing_hour_account_balance
                 vacation_balance = month_record.closing_vacation_balance
-                previous_month = month_record
+                nearest_previous_month = month_record
 
             for affected_year in affected_years:
                 year_record, _ = EmployeeYear.objects.get_or_create(

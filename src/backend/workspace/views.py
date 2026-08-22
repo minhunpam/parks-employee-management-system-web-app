@@ -10,6 +10,7 @@ from django.views.decorators.http import require_GET, require_POST
 from django.http import HttpResponseBadRequest, JsonResponse
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.conf import settings
 
 # Google modules
@@ -23,6 +24,7 @@ from googleapiclient.errors import HttpError
 from accounts.google_oauth import build_google_client_config
 from accounts.models import GoogleConnection
 from .models import WorkspaceConfiguration
+from employees.models import EmployeeMonth
 from .google_resources import parse_resource_id
 from .csv_parser import parse_csv_content
 from utils.validator import (
@@ -32,6 +34,7 @@ from utils.validator import (
 )
 from .google_drive_client import GoogleDriveClient
 from .google_sheets_client import GoogleSheetsClient
+from . import sheets_preview_helpers
 
 @login_required
 def entry(request):
@@ -460,7 +463,7 @@ def save_setup(request):
     if not 2000 <= period_year <= 2099:
         return JsonResponse({"error": "The import year must be between 2000 and 2099."}, status=400)
 
-    configuration = WorkspaceConfiguration.objects.filter(owner=request.user).first()
+    configuration: WorkspaceConfiguration = WorkspaceConfiguration.objects.filter(owner=request.user).first()
     changed = configuration and (
         configuration.root_folder_id != root_folder_id
         or configuration.spreadsheet_id != spreadsheet_id
@@ -519,8 +522,135 @@ def save_setup(request):
 
 @login_required
 def sheets_preview(request):
+    overview_url = reverse("workspace:sheets-overview")
     return render(
         request,
-        "workspace/sheets-preview.html"
+        "workspace/sheets-preview.html",
+        {
+            "sheets_preview_overview_url": overview_url,
+            "sheets_preview_refresh_url": overview_url,
+        },
     )
-    
+
+@login_required
+@require_GET
+def sheets_preview_overview(request):
+    connection: GoogleConnection = getattr(request.user, "google_connection", None)
+    configuration: WorkspaceConfiguration = getattr(request.user, "owned_workspace", None)
+    validation_response = validate_connection_and_configuration(connection, configuration)
+    if validation_response is not None:
+        return validation_response
+
+    try:
+        _, google_sheets_client, _, spreadsheet = get_validated_workspace_resources(
+            connection,
+            configuration.root_folder_id,
+            configuration.spreadsheet_id,
+        )
+    except RefreshError:
+        return JsonResponse(
+            {
+                "error": "Your Google connection has expired or been revoked. Please reconnect Google.",
+                "code": "google_reconnect_required",
+            },
+            status=401,
+        )
+    except PermissionError as error:
+        return JsonResponse({"error": str(error)}, status=403)
+    except ValueError as error:
+        return JsonResponse({"error": str(error)}, status=400)
+    except HttpError as error:
+        return JsonResponse({"error": str(error)}, status=502)
+
+    spreadsheet_id = spreadsheet["spreadsheetId"]
+    employees = {}
+    sheet_records = []
+
+    try:
+        for sheet in spreadsheet.get("sheets", []):
+            properties = sheet.get("properties", {})
+            sheet_title = properties.get("title")
+            if not sheet_title:
+                continue
+
+            raw_rows = google_sheets_client.read_sheet_values(spreadsheet_id, sheet_title)
+            employee = GoogleSheetsClient._find_employee_for_sheet(sheet_title)
+
+            # Google Sheets is the source of truth for daily activity. Rebuild
+            # the database summaries before reading them for the overview.
+            google_sheets_client._update_employee_summaries(
+                sheet_title,
+                raw_rows,
+                year=configuration.period_year,
+                month=configuration.period_month,
+            )
+
+            rows = [
+                sheets_preview_helpers._handle_row(row, row_index)
+                for row_index, row in enumerate(raw_rows)
+                if row and row[0]
+            ]
+            
+            employees[sheet_title.casefold()] = {
+                "name": sheet_title,
+                "sheetId": properties.get("sheetId"),
+                "rows": rows,
+            }
+            
+            sheet_records.append((employee, sheet_title, raw_rows))
+    except ValueError as error:
+        return JsonResponse({"error": str(error)}, status=400)
+    except HttpError as error:
+        return JsonResponse({"error": "The spreadsheet data could not be read.", "detail": str(error)}, status=502)
+
+    overview_rows = []
+    worked_hours = 0.0
+    vacation_days = 0.0
+    total_warning_count = 0
+
+    for employee, sheet_title, raw_rows in sheet_records:
+        month_record = EmployeeMonth.objects.filter(
+            employee=employee,
+            year=configuration.period_year,
+            month=configuration.period_month,
+        ).first()
+        if month_record is None:
+            continue
+
+        warnings_str, individual_warning_count = sheets_preview_helpers._sheet_warnings(raw_rows)
+        worked_hours += float(month_record.worked_hours)
+        vacation_days += month_record.vacation_days_used
+        total_warning_count += individual_warning_count
+
+        overview_rows.append({
+            "employeeId": sheet_title.casefold(),
+            "employee": sheet_title,
+            "target": sheets_preview_helpers._hours(month_record.target_working_hours),
+            "worked": sheets_preview_helpers._hours(month_record.worked_hours),
+            "difference": sheets_preview_helpers._hours(month_record.hour_difference),
+            "opening": sheets_preview_helpers._hours(month_record.opening_hour_account_balance),
+            "closing": sheets_preview_helpers._hours(month_record.closing_hour_account_balance),
+            "vacation": sheets_preview_helpers._days(month_record.closing_vacation_balance),
+            "warnings": warnings_str,
+        })
+
+    return JsonResponse({
+        "data": {
+            "configuration_period": configuration.config_period_str,
+            "spreadsheetUrl": f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/edit",
+            "overview": {
+                "headers": [
+                    "Employee", "Target hours", "Worked hours", "Difference",
+                    "Opening balance", "Closing balance", "Vacation balance", "Warnings",
+                ],
+                "rows": overview_rows,
+            },
+            "summary": [
+                {"label": "Employees", "value": str(len(overview_rows))},
+                {"label": "Worked hours", "value": sheets_preview_helpers._hours(worked_hours)},
+                {"label": "Vacation days", "value": sheets_preview_helpers._days(vacation_days)},
+                {"label": "Warnings", "value": str(total_warning_count)},
+            ],
+            "employees": employees,
+        },
+    }, status=200)

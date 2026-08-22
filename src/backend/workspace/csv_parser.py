@@ -236,8 +236,8 @@ def handle_entries(
             "pause_start": pause_start,
             "pause_end": pause_end,
             "shift_end": shift_end,
-            "shift_total_time": round(working_minutes / 60, 2),
             "pause_minutes": pause_minutes,
+            "shift_total_time": round(working_minutes / 60, 2),
             "type_of_day": "Feiertag" if is_public_holiday else "Arbeit",
             "warnings": ", ".join(dict.fromkeys(warnings)),
         }

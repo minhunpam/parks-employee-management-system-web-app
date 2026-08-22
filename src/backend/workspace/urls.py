@@ -9,6 +9,7 @@ from .views import (
     setup,
     save_setup,
     sheets_preview,
+    sheets_preview_overview
 )
 
 app_name = "workspace"
@@ -22,4 +23,5 @@ urlpatterns = [
     path("setup/", setup, name="setup"),
     path("setup/api/save/", save_setup, name="setup-save"),
     path("sheets-preview/", sheets_preview, name="sheets-preview"),
+    path("sheets-preview/api/overview", sheets_preview_overview, name="sheets-overview"),
 ]
