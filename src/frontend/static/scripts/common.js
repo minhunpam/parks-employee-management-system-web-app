@@ -12,4 +12,17 @@ export const htmlInjectionProtection = (value) =>
     "'": "&#39;",
     '"': "&quot;"
   }[char])
-);
+  );
+
+export function getDaysInMonth(year, month) {
+  if (month === 12) {
+    month = 1;
+    year++;
+  }
+  else {
+    month++;
+  }
+  
+  const lastDay = new Date(year, month, 0);
+  return lastDay.getDate();
+}

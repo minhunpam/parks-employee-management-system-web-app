@@ -1,4 +1,4 @@
-import { csrfToken, htmlInjectionProtection } from "../common.js";
+import { csrfToken, htmlInjectionProtection, getDaysInMonth } from "../common.js";
 
 const page = document.querySelector("#sheets-preview-page");
 const overviewUrl = page.dataset.overviewUrl;
@@ -30,6 +30,11 @@ const openEmployeeSheetLink = document.querySelector("#open-employee-sheet-link"
 
 const dialog = document.querySelector("#entry-dialog");
 const entryForm = document.querySelector("#entry-form");
+const entryDate = document.querySelector("entry-date");
+const entryType = document.querySelector("#entry-type");
+const entryStart = document.querySelector("#entry-start");
+const entryEnd = document.querySelector("#entry-end");
+
 const entryFormStatus = document.querySelector("#entry-form-status");
 
 function sheetUrl(sheetId) {
@@ -145,7 +150,9 @@ async function loadData({ refresh = false } = {}) {
     });
     
     const payload = await response.json();
+    
     if (response.ok) {
+      console.log(payload);
       setLoadedData(payload.data || payload, Boolean(payload.external_change));
     }
     
@@ -158,13 +165,27 @@ async function loadData({ refresh = false } = {}) {
 }
 
 function openEntryDialog(row = null) {
+  const configuration_period = state.overview.configuration_period.split("/");
+  const month = configuration_period[0].length === 2 ? `${configuration_period[0]}` : `0${configuration_period[0]}`;
+  const year = `${configuration_period[1]}`;
+  const days_in_month = getDaysInMonth(Number(month), Number(year));
+  
+  
   state.editingEntry = row;
   document.querySelector("#entry-dialog-title").textContent = row ? "Correct daily entry" : "Add daily entry";
-  document.querySelector("#entry-date").value = row?.date?.split(".").reverse().join("-") || "";
-  document.querySelector("#entry-type").value = row?.type || "Arbeit";
-  document.querySelector("#entry-start").value = row?.start !== "—" ? row?.start || "" : "";
-  document.querySelector("#entry-end").value = row?.end !== "—" ? row?.end || "" : "";
-  document.querySelector("#entry-warning").value = row?.warning !== "—" ? row?.warning || "" : "";
+  entryDate.min = `${year}-${month}-01`;
+  entryDate.max = `${year}-${month}-${days_in_month}`;
+  entryDate.value = row?.date?.split(".").reverse().join("-") || `${year}-${month}-01`;
+
+  
+  entryType.value = row?.type || "Arbeit";
+  if (entryType.value === "Arbeit") {
+    entryStart.setAttribute("required", true);
+    entryEnd.setAttribute("required", true);
+  }
+  
+  entryStart.value = row?.start !== "—" ? row?.start || "" : "";
+  entryEnd.value = row?.end !== "—" ? row?.end || "" : "";
   
   entryFormStatus.textContent = "";
   
@@ -177,14 +198,21 @@ async function submitEntry(event) {
   event.preventDefault();
   entryFormStatus.textContent = "Validating entry…";
 
+  const array_decomposed_date = entryDate.value.split("-");
+  const year = array_decomposed_date[0];
+  const month = array_decomposed_date[1];
+  const day = array_decomposed_date[2];
+
+  const normalized_date = `${day}.${month}.${year}`
+  const row_index = Number(day) - 1;
+  
   const payload = {
     employee_id: state.selectedEmployee,
-    date: document.querySelector("#entry-date").value,
-    type: document.querySelector("#entry-type").value,
-    start: document.querySelector("#entry-start").value,
-    end: document.querySelector("#entry-end").value,
-    warning: document.querySelector("#entry-warning").value,
-    row_index: state.editingEntry?.rowIndex ?? null,
+    date: normalized_date,
+    type: entryType.value,
+    start: entryStart.value,
+    end: entryEnd.value,
+    row_index: row_index,
   };
 
   if (!writeUrl) {

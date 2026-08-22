@@ -523,12 +523,14 @@ def save_setup(request):
 @login_required
 def sheets_preview(request):
     overview_url = reverse("workspace:sheets-overview")
+    write_url = reverse("workspace:sheets-write")
     return render(
         request,
         "workspace/sheets-preview.html",
         {
             "sheets_preview_overview_url": overview_url,
             "sheets_preview_refresh_url": overview_url,
+            "sheets_preview_write_url": write_url,
         },
     )
 
@@ -647,4 +649,47 @@ def sheets_preview_overview(request):
             },
             "employees": employees,
         },
+    }, status=200)
+
+
+@login_required
+@require_POST
+def sheets_preview_write(request):
+    connection: GoogleConnection = getattr(request.user, "google_connection", None)
+    configuration: WorkspaceConfiguration = getattr(request.user, "owned_workspace", None)
+    validation_response = validate_connection_and_configuration(connection, configuration)
+    if validation_response is not None:
+        return validation_response
+
+    try:
+        _, google_sheets_client, _, spreadsheet = get_validated_workspace_resources(
+            connection,
+            configuration.root_folder_id,
+            configuration.spreadsheet_id,
+        )
+    except RefreshError:
+        return JsonResponse(
+            {
+                "error": "Your Google connection has expired or been revoked. Please reconnect Google.",
+                "code": "google_reconnect_required",
+            },
+            status=401,
+        )
+    except PermissionError as error:
+        return JsonResponse({"error": str(error)}, status=403)
+    except ValueError as error:
+        return JsonResponse({"error": str(error)}, status=400)
+    except HttpError as error:
+        return JsonResponse({"error": str(error)}, status=502)
+
+    spreadsheet_id = spreadsheet["spreadsheetId"]
+
+    payload = json.loads(request.body)
+    sheet_title = payload["employee_id"]
+    print(payload)
+    
+    # {'employee_id': 'angelina', 'date': '2026-06-01', 'type': 'Arbeit', 'start': '00:12', 'end': '16:45', 'row_index': None}
+
+    return JsonResponse({
+        "message": "success"
     }, status=200)
