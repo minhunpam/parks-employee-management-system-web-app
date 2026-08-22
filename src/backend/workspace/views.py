@@ -645,12 +645,6 @@ def sheets_preview_overview(request):
                 ],
                 "rows": overview_rows,
             },
-            "summary": [
-                {"label": "Employees", "value": str(len(overview_rows))},
-                {"label": "Worked hours", "value": sheets_preview_helpers._hours(worked_hours)},
-                {"label": "Vacation days", "value": sheets_preview_helpers._days(vacation_days)},
-                {"label": "Warnings", "value": str(total_warning_count)},
-            ],
             "employees": employees,
         },
     }, status=200)

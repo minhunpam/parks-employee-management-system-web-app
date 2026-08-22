@@ -12,41 +12,9 @@ const state = {
     editingEntry: null,
 };
 
-const mockData = {
-    period: "June 2026",
-    spreadsheetId: "preview-spreadsheet",
-    overview: {
-        headers: ["Employee", "Target hours", "Worked hours", "Difference", "Opening balance", "Closing balance", "Vacation balance", "Warnings"],
-        rows: [
-            { employeeId: "ademir", employee: "Ademir", target: "173.00 h", worked: "168.50 h", difference: "-4.50 h", opening: "-2.00 h", closing: "-6.50 h", vacation: "20.0 d", warnings: "—" },
-            { employeeId: "anna", employee: "Anna Berger", target: "173.00 h", worked: "176.00 h", difference: "+3.00 h", opening: "+1.50 h", closing: "+4.50 h", vacation: "18.0 d", warnings: "Review" },
-            { employeeId: "milan", employee: "Milan Kovac", target: "160.00 h", worked: "160.00 h", difference: "0.00 h", opening: "0.00 h", closing: "0.00 h", vacation: "22.0 d", warnings: "—" },
-        ],
-    },
-    summary: [
-        { label: "Employees", value: "3" },
-        { label: "Worked hours", value: "504.50 h" },
-        { label: "Vacation days", value: "6.0 d" },
-        { label: "Warnings", value: "1" },
-    ],
-    employees: {
-        ademir: { name: "Ademir", sheetId: "ademir-sheet", rows: [
-            { date: "01.06.2026", start: "08:00", pause: "30 min", end: "16:30", total: "8.00 h", type: "Arbeit", warning: "—" },
-            { date: "02.06.2026", start: "08:00", pause: "30 min", end: "16:30", total: "8.00 h", type: "Arbeit", warning: "—" },
-            { date: "03.06.2026", start: "—", pause: "—", end: "—", total: "8.00 h", type: "Urlaub", warning: "—" },
-        ] },
-        anna: { name: "Anna Berger", sheetId: "anna-sheet", rows: [
-            { date: "01.06.2026", start: "09:00", pause: "30 min", end: "17:30", total: "8.00 h", type: "Arbeit", warning: "—" },
-            { date: "02.06.2026", start: "09:00", pause: "30 min", end: "17:30", total: "8.00 h", type: "Arbeit", warning: "Missing break" },
-        ] },
-        milan: { name: "Milan Kovac", sheetId: "milan-sheet", rows: [] },
-    },
-};
-
 const overviewTableHead = document.querySelector("#overview-table-head");
 const overviewTableBody = document.querySelector("#overview-table-body");
 
-const summaryCards = document.querySelector("#summary-cards");
 const employeeSearch = document.querySelector("#employee-search");
 const tableStatus = document.querySelector("#table-status");
 const syncStatus = document.querySelector("#sync-status");
@@ -70,16 +38,6 @@ function sheetUrl(sheetId) {
   }
 
   return `https://docs.google.com/spreadsheets/d/${encodeURIComponent(state.overview.spreadsheetId)}/edit#gid=${encodeURIComponent(sheetId)}`;
-}
-
-function renderSummary() {
-    summaryCards.innerHTML = (state.overview.summary || []).map((card) => `
-        <article class="relative border border-[#cccccc] bg-white p-5">
-            <span class="absolute -left-px -top-px h-3 w-3 bg-[#76b900]" aria-hidden="true"></span>
-            <p class="text-3xl font-bold">${htmlInjectionProtection(card.value)}</p>
-            <p class="mt-2 text-sm text-[#757575]">${htmlInjectionProtection(card.label)}</p>
-        </article>
-    `).join("");
 }
 
 function renderOverview() {
@@ -163,7 +121,6 @@ function setLoadedData(data, externalChange = false) {
   openSheetsLink.href = data.spreadsheetUrl || "#";
   openSheetsLink.classList.toggle("pointer-events-none", openSheetsLink.href === "#");
   
-  renderSummary();
   renderOverview();
   
   if (state.selectedEmployee) {
@@ -179,13 +136,6 @@ async function loadData({ refresh = false } = {}) {
   document.querySelector("#refresh-preview-button").disabled = true;
   
   try {
-    
-    if (!overviewUrl && !refreshUrl) {
-        setLoadedData(mockData);
-        syncStatus.textContent = "Preview UI is using sample data until the backend endpoint is connected.";
-        return;
-    }
-
     const dataUrl = refresh ? refreshUrl || overviewUrl : overviewUrl || refreshUrl;
 
     const response = await fetch(dataUrl, {
