@@ -166,6 +166,8 @@ class GoogleSheetsClient:
                 warnings.append("Feiertag-Arbeit")
         elif type_of_day == "Frei":
             warnings.clear()
+        else:
+            working_minutes = 8 * 60;
 
         write_values = [
             shift_start, 

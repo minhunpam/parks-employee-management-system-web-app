@@ -176,12 +176,8 @@ function openEntryDialog(row = null) {
   entryDate.max = `${year}-${month}-${days_in_month}`;
   entryDate.value = row?.date?.split(".").reverse().join("-") || `${year}-${month}-01`;
 
-  
-  entryType.value = row?.type || "Arbeit";
-  
-  entryType.addEventListener("change", (event) => { 
-    const option = event.target.value;
-  
+
+  const toggle_required_and_disabled = (option) => { 
     if (option === "Arbeit") {
       entryStart.required = true;
       entryEnd.required = true;
@@ -194,11 +190,25 @@ function openEntryDialog(row = null) {
       entryStart.disabled = true;
       entryEnd.disabled = true;
     }
+  }
+  
+  entryType.value = row?.type || "Arbeit";
+  toggle_required_and_disabled(entryType.value);
+  
+  entryType.addEventListener("change", (event) => { 
+    const option = event.target.value;
+    toggle_required_and_disabled(option);
   });
   
   
   entryStart.value = row?.start !== "—" ? row?.start || "" : "";
   entryEnd.value = row?.end !== "—" ? row?.end || "" : "";
+
+  entryEnd.addEventListener("change", () => {
+    if (entryStart.value && entryEnd.value && entryStart.value >= entryEnd.value) {
+      entryStart.setCustomValidity("Entry start cannot be later than entry end!");
+    }
+  })
   
   entryFormStatus.textContent = "";
   
@@ -206,6 +216,8 @@ function openEntryDialog(row = null) {
     dialog.showModal();
   }
 }
+
+
 
 async function submitEntry(event) {
   event.preventDefault();
