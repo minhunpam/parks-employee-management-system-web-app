@@ -14,6 +14,7 @@
 - When writng, keep the format clean:
   - Don't span lines crazily
   - Don't add a great number of blank lines
+- When writing documentation, write it in a way that the readers understand the underlying principals and mechanism. Don't expose specific code (because that might change in the future)
 
 ## Where knowledge now lives
 - Read the source that answers the question being asked

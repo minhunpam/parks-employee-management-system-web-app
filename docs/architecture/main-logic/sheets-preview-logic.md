@@ -11,16 +11,17 @@
 > The preview is separate from the employee management dashboard. The employee dashboard manages application data stored in `Employee`, `EmployeeMonth`, and `EmployeeYear`. The Sheets preview displays operational data stored in Google Sheets.
 
 ## Current spreadsheet structure
-- The configured spreadsheet has two types of sheets:
+- The intended spreadsheet has two types of sheets:
 1. **Monthly overview sheet**
    - Represents the configured spreadsheet month.
    - Acts as the landing view for the preview page.
-   - Contains the monthly overview data already generated in Google Sheets.
 
 2. **Individual employee sheets**
    - Each sheet belongs to one employee.
    - Contains the employee's daily entries.
    - The current structure has one row for each date.
+
+- The current preview endpoint processes every spreadsheet tab as an employee sheet and matches its title to an application employee. A dedicated overview tab is therefore not supported yet; until that changes, the configured spreadsheet should contain employee tabs that follow the expected naming convention.
 
 For the current version:
 ```text
@@ -36,24 +37,25 @@ The application database and Google Sheets have separate responsibilities:
 
 - The Sheets preview should:
   - Use application employee records to identify and label employees where appropriate.
-  - Display the actual Monthly overview sheet from Google Sheets.
   - Display individual employee sheets for detailed daily data.
-  - Avoid replacing spreadsheet preview data with `EmployeeMonth` or `EmployeeYear` data.
+  - Use `EmployeeMonth` and `EmployeeYear` only for the rendered summary calculations.
+  - Avoid treating application summary records as the source of daily spreadsheet entries.
 
 The existing Employee Dashboard remains the database-backed reporting view. The Sheets preview remains the Google Sheets-backed operational view.
 
 ## Preview page structure
 ### Monthly overview landing page
-- The preview opens on the existing Monthly overview sheet.
+- The preview opens on the configured spreadsheet period and loads the configured spreadsheet's employee sheets.
+- In the current implementation, the monthly overview is an application-rendered summary built from those employee sheets and `EmployeeMonth` records. It is not yet a direct rendering of a dedicated Google Sheets `Monthly overview` tab.
 - The page should include:
   - Month and year represented by the spreadsheet.
   - Spreadsheet name.
   - Last synchronized or checked time.
   - A `Refresh data` action.
   - An `Open in Google Sheets` link.
-  - A read-only rendering of the Monthly overview sheet.
+  - A read-only rendering of the monthly employee summary.
 
-- The page should preserve the meaning and structure of the existing overview sheet rather than replacing it with independently calculated application data.
+- Once a dedicated overview tab is supported, the page should preserve its meaning and structure rather than replacing it with independently calculated application data.
 
 ### Employee sheet detail view
 - Each employee row or employee reference in the Monthly overview can lead to the corresponding individual employee sheet.
@@ -66,6 +68,16 @@ The existing Employee Dashboard remains the database-backed reporting view. The 
   - Refresh after a successful write.
   - Provide an `Open in Google Sheets` link where useful.
 
+## Current implementation
+- `GET /workspace/sheets-preview/` renders the preview shell.
+- `GET /workspace/sheets-preview/overview/` validates the Google connection and workspace configuration, reads every sheet, rebuilds the matching `EmployeeMonth`/`EmployeeYear` summaries, and returns JSON containing:
+  - the configured period and spreadsheet URL;
+  - one summary row per employee sheet;
+  - each employee sheet's daily rows and Google `sheetId`.
+- Employee sheet names are matched to employees by normalized first name or full name. A missing or ambiguous match aborts the response with an explicit error.
+- The frontend supports employee filtering, employee-sheet drill-down, opening the spreadsheet or sheet in Google Sheets, refreshing, and showing warning counts.
+- Existing daily cells are displayed as read-only, but the current backend write endpoint does not yet perform a separate stale-data or row-identity check.
+
 ## Data-entry behavior
 - The preview is not an editable spreadsheet grid. Managers must use PARKS UI forms to enter or correct data.
 
@@ -74,20 +86,28 @@ The existing Employee Dashboard remains the database-backed reporting view. The 
 2. The manager opens the employee sheet detail view.
 3. The manager selects `Add entry`.
 4. PARKS displays a validated data-entry form.
-5. PARKS writes the new entry to the employee's protected sheet through the Google Sheets API.
-6. PARKS refreshes the employee detail view.
-7. PARKS refreshes the Monthly overview so the latest totals are visible.
+5. PARKS writes the entry to the selected employee sheet through the Google Sheets API.
+6. PARKS reloads the preview response, which rebuilds the employee summaries and refreshes the displayed data.
+7. The monthly summary is refreshed from the employee sheets.
 
 ### Correcting an entry
-- Because the current employee sheet contains one row per date, the application identifies an entry using:
-```text
-employee sheet + date
-```
-> To correct an entry, PARKS locates the row for the selected date and updates it through the API. If a future spreadsheet structure permits multiple rows for one date, the entry identity rules will need to be extended.
+- The frontend currently identifies the target row by the selected calendar day and sends a zero-based `row_index`; the backend converts it to the corresponding sheet row (`row_index + 2`) and updates columns B:I.
+- The current spreadsheet convention therefore assumes one row per calendar day, ordered from the first day of the month. This is an implementation assumption rather than a robust row identity.
+- If a future spreadsheet structure permits multiple rows for one date, the entry identity rules will need to be extended.
+
+### Manual entry rules currently implemented
+- `Arbeit` requires start and end times in the UI. The backend calculates working minutes from the two times.
+- Entries longer than six hours receive an automatically generated pause start/end; the pause duration is currently zero minutes.
+- Work on a public holiday is doubled and receives the `Feiertag-Arbeit` warning.
+- `Frei` clears warnings and writes zero working hours.
+- Other currently selectable types (`Urlaub`, `Krankenstand`, `Feiertag`, and `Extern`) are temporarily treated as eight paid-absence hours by the backend. This rule is provisional and requires business confirmation.
+- Every manual write receives the `Manuell` warning unless the `Frei` rule clears warnings.
+- The frontend validates that the end time is later than the start time and restricts the date to the configured month.
 
 ## Sheet protection
-- Individual employee sheets should be protected by default when they are created or configured.
-- The protection should:
+- After import or replacement, the current implementation adds a Google Sheets protected-range request for the whole employee sheet with `warningOnly: true`.
+- This currently displays a warning rather than technically preventing direct edits. A strict protection mode still needs to be implemented and verified.
+- The intended protection should:
   - Prevent normal direct editing of employee sheet cells in Google Sheets.
   - Allow PARKS to update the protected sheet through its authenticated Google API identity.
   - Include a description such as:
@@ -127,7 +147,7 @@ last checked timestamp
   - The Monthly overview sheet.
   - Individual employee sheets.
 
-- After a successful PARKS write, the application updates its stored snapshot so its own change is not reported as an external change.
+- Snapshot/hash comparison is planned but is not implemented in the current preview endpoint. The current `Refresh data` action simply fetches the latest spreadsheet values.
 - Initial synchronization is therefore explicit and predictable rather than real-time. Automatic polling or Apps Script-based synchronization can be considered later if required.
 
 ## Employee and sheet matching
@@ -150,10 +170,10 @@ The matching logic should remain isolated so that a future stable employee ID ca
 
 ## Monthly overview and employee sheet consistency
 
-- PARKS must treat the existing Google Sheets structure as authoritative for this preview:
-  - The Monthly overview is read from the actual Monthly overview sheet.
+- PARKS must treat Google Sheets as authoritative for daily employee data:
   - Employee details are read from the actual employee sheets.
-  - PARKS does not independently reconstruct the Monthly overview from application summaries for the initial version.
+  - The current monthly summary is assembled by PARKS from those rows and refreshed `EmployeeMonth` records.
+  - A dedicated Google Sheets Monthly overview tab is a planned follow-up, not part of the current endpoint.
 
 - After PARKS changes an employee sheet, it must refresh the employee view and the Monthly overview because the overview may contain formulas or generated values that depend on the employee sheet.
 
@@ -178,4 +198,4 @@ The following are outside the initial preview implementation:
 - Removing or overriding Google Sheets protection through PARKS.
 - Stable employee IDs embedded in CSV files or sheet metadata.
 - Support for multiple rows for the same employee and date.
-- Replacing the existing Monthly overview with an independently calculated database view.
+- Supporting a dedicated Google Sheets Monthly overview tab instead of the current application-rendered summary.

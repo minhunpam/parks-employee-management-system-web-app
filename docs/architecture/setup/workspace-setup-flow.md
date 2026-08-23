@@ -1,7 +1,9 @@
 - After being redirected to `workspace/setup` page, user will see a form to configure their workspace.
 - This form will ask the user to enter:
-  1. Drive root folder ID or UR
+  1. Drive root folder ID or URL
   2. Main spreadsheet ID or URL
+  3. Import month
+  4. Import year
 - Once the user enters the required information, submitting the form triggers the event `submit`.
 
 ## `submit` Event
@@ -20,9 +22,10 @@
 - [Parsing the resource IDs](#parsing-the-resource-ids)
 - After that, we will try to fetch an existing workspace configuration attached to the request user:
   - If no existing configuration is found, we will create a new one.
-  - If an existing configuration is found, but the root folder it and the spreadsheet id were changed, it will raise 400 Error and ask the user for confirmation to update the configuration ---> Restart `saveSetup()`
+  - If an existing configuration is found and any folder, spreadsheet, month, or year value changes, it returns a confirmation challenge and asks the user to confirm with `CHANGE WORKSPACE CONFIG` before updating the configuration.
 - Next step is [validating the resource IDs](#validating-the-resource-ids)
-- After the validation, for non-existing configuration instance, a new one will be created and saved to the database (_at least the Django admin DB for now_).
+- The month must be 1–12 and the year must be 2000–2099.
+- After validation, the configuration is created or updated and stores the root folder ID, spreadsheet ID, import month, and import year.
 
 
 ### Parsing the resource IDs:

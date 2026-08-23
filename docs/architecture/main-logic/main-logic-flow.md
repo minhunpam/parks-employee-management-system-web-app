@@ -5,8 +5,9 @@
   - Spreadsheet ID
 
 ## CSV Importing
-- There is a button called "Import CSV" which on click event, will it will make a request to the the `workspace:import_csv` endpoint to trigger the csv import process.
-- We don't need to send the folder and spreadsheet IDs from the frontend because the backend already knows them from the logged-in user's session.
+- The workspace entry page has separate `Check for CSV files` and `Import files` actions.
+- The check action calls `workspace:csv-import-check`; the import action calls `workspace:csv-import`.
+- Neither request sends folder or spreadsheet IDs because the backend reads them from the logged-in user's workspace configuration.
 
 ### `csv_import()`
 - Validation before the CSV importing logic:
@@ -15,8 +16,12 @@
     - The previous configuration might become stale, since the user can delete either of them
 - After that, the returned folder and spreadsheet would be handled
 - From the returned folder, the month/year subfolders are recursively created if they don't exist via `prepare_csv_import_folder()` which eventually returns an import state
-- Depends on the `import_state`, different responses back to the user are sent
-  - Most likely it would ask the user to upload employee csv files into the Drive month subfolder
+- Depending on `import_state`, the endpoints return:
+  - `awaiting_upload` when the previous-month folder is empty;
+  - `invalid_files` when filenames do not follow the required convention;
+  - `ready` with the files and spreadsheet metadata when files are valid.
+- The import endpoint revalidates the folder before parsing each CSV, checks the expected month/year and employee data, creates employee sheets and headers when needed, replaces the affected employee rows, and updates application summaries.
+- Successfully imported Drive files are archived. A spreadsheet update or archive failure is reported separately so the manager knows whether the spreadsheet was changed.
 
 ---
 
@@ -72,3 +77,20 @@ CSV_FILENAME = re.compile(
   - `csv` - literal `csv` string
 - `$` - end of the string
 
+## Google Sheets preview
+- The workspace entry page links to the Sheets preview after a workspace has been configured.
+- `sheets_preview_overview()` validates the user's Google connection and configured Drive/spreadsheet resources before reading the spreadsheet.
+- For each spreadsheet tab, the backend reads employee rows from columns A:I, matches the tab name to an employee, rebuilds the employee's monthly and yearly summary records, and returns the daily rows plus the summary data as JSON.
+- The frontend renders the employee overview, supports name filtering and employee-sheet drill-down, and can open the spreadsheet or individual sheet in Google Sheets.
+> The preview is read-only except for the application entry form. It does not yet render a dedicated Google Sheets Monthly overview tab or perform snapshot/hash-based external-change detection.
+
+## Manual spreadsheet entries
+- The employee detail view sends a date, entry type, start/end times, selected employee sheet, and row index to the Sheets write endpoint.
+- The backend writes columns B:I of the calculated sheet row and then the frontend reloads the preview, rebuilding the database summaries from Google Sheets.
+- Current rules are:
+  - `Arbeit`: calculate working time from start/end; work longer than six hours gets an automatically generated zero-minute pause.
+  - Public-holiday work is doubled and marked `Feiertag-Arbeit`.
+  - `Frei`: reset the row to zero hours and clear warnings.
+  - Other selectable absence types currently become eight paid-absence hours; this is provisional business logic.
+  - Manual writes are marked with `Manuell` unless the row is reset with `Frei`.
+- The UI requires start/end only for `Arbeit`, checks that end is later than start, and limits dates to the configured month.

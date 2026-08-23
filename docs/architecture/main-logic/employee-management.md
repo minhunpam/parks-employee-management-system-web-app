@@ -73,3 +73,9 @@
 - Employee will be registered through a form from the frontend by clicking the "Register Employee" button
 - The form will have pretty much the same shape as the on from the admin site (it includes all the fields of the model `Employee`)
 - For some fields, there are a few client-side validations
+
+## Spreadsheet summary synchronization
+- Google Sheets is the source of truth for daily operational entries.
+- When the Sheets preview reads an employee sheet, it summarizes the rows and updates the matching `EmployeeMonth` and `EmployeeYear` records.
+- The monthly summary includes worked hours, paid-absence hours, vacation days used, hour differences, opening/closing hour balances, and vacation balances.
+- Later months are recalculated when an earlier month's summary changes so carried hour and vacation balances remain consistent.
