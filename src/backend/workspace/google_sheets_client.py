@@ -180,14 +180,12 @@ class GoogleSheetsClient:
             ", ".join(dict.fromkeys(warnings)),
         ]
 
-        print(write_values)
-
         row_index = payload.get("row_index", None)
         if row_index is None:
             return JsonResponse({"error": "row_index is empty"}, status=400)
         row_number = row_index + 2
         
-        response = self.sheets_service.spreadsheets().values().update(
+        self.sheets_service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
             range=f"{sheet_title}!B{row_number}:I{row_number}",
             valueInputOption="RAW",
@@ -195,9 +193,6 @@ class GoogleSheetsClient:
                 "values": [write_values]
             }
         ).execute()
-
-        print(response)
-        
 
     @staticmethod
     def entries_to_rows(entries):

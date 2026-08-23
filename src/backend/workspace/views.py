@@ -422,7 +422,6 @@ def setup(request):
         or not connection.encrypted_refresh_token
         or not connection.granted_scopes
     ):
-        print("Redirecting to connect because connection is missing or invalid.")
         return redirect("workspace:connect")
 
     configuration = (
@@ -620,8 +619,6 @@ def sheets_preview_overview(request):
         if month_record is None:
             continue
 
-        print(month_record)
-
         warnings_str, individual_warning_count = sheets_preview_helpers._sheet_warnings(raw_rows)
         worked_hours += float(month_record.worked_hours)
         vacation_days += month_record.vacation_days_used
@@ -692,8 +689,15 @@ def sheets_preview_write(request):
 
     google_sheets_client.parse_manual_entry(payload, spreadsheet_id, sheet_title)
     
-    # {'employee_id': 'angelina', 'date': '2026-06-01', 'type': 'Arbeit', 'start': '00:12', 'end': '16:45', 'row_index': None}
-
-    return JsonResponse({
-        "message": "success"
-    }, status=200)
+    return JsonResponse(
+        {
+            "status": "success",
+            "message": "The employee entry was saved successfully.",
+            "entry": {
+                "employee": sheet_title,
+                "date": payload.get("date"),
+                "type": payload.get("type"),
+            },
+        },
+        status=200,
+    )

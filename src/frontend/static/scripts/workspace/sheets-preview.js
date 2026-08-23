@@ -239,7 +239,6 @@ async function submitEntry(event) {
     end: entryEnd.value,
     row_index: row_index,
   };
-  console.log(payload);
 
   try {
     const response = await fetch(writeUrl, {
