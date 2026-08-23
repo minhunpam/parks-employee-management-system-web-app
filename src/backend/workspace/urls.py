@@ -8,6 +8,9 @@ from .views import (
     connect_callback,
     setup,
     save_setup,
+    sheets_preview,
+    sheets_preview_overview,
+    sheets_preview_write,
 )
 
 app_name = "workspace"
@@ -20,4 +23,7 @@ urlpatterns = [
     path("connect/callback/", connect_callback, name="connect-callback"),
     path("setup/", setup, name="setup"),
     path("setup/api/save/", save_setup, name="setup-save"),
+    path("sheets-preview/", sheets_preview, name="sheets-preview"),
+    path("sheets-preview/api/overview", sheets_preview_overview, name="sheets-overview"),
+    path("sheets-preview/api/write", sheets_preview_write, name="sheets-write"),
 ]

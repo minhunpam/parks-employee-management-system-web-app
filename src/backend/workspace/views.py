@@ -10,6 +10,7 @@ from django.views.decorators.http import require_GET, require_POST
 from django.http import HttpResponseBadRequest, JsonResponse
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.conf import settings
 
 # Google modules
@@ -18,22 +19,29 @@ from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import Flow
 from google.oauth2 import id_token
 from googleapiclient.errors import HttpError
-from httplib2 import GoogleLoginAuthentication
 
 # Local modules
 from accounts.google_oauth import build_google_client_config
 from accounts.models import GoogleConnection
 from .models import WorkspaceConfiguration
-from .google_resources import GoogleResources, CsvParser, GoogleSheetsHelper
-from utils.Validator import Validator
-
+from employees.models import EmployeeMonth
+from .google_resources import parse_resource_id
+from .csv_parser import parse_csv_content
+from utils.validator import (
+    validate_connection_and_configuration,
+    get_validated_workspace_resources,
+    validate_folder_and_spreadsheet_ids
+)
+from .google_drive_client import GoogleDriveClient
+from .google_sheets_client import GoogleSheetsClient
+from . import sheets_preview_helpers
 
 @login_required
 def entry(request):
     connection = getattr(request.user, "google_connection", None)
     configuration = getattr(request.user, "owned_workspace", None)
 
-    validation_response = Validator.validate_connection_and_configuration(connection, configuration)
+    validation_response = validate_connection_and_configuration(connection, configuration)
     if validation_response is not None:
         return validation_response
     
@@ -57,21 +65,19 @@ def _validate_csv_import_context(request):
     connection = getattr(request.user, "google_connection", None)
     configuration = getattr(request.user, "owned_workspace", None)
 
-    validation_response = Validator.validate_connection_and_configuration(connection, configuration)
+    validation_response = validate_connection_and_configuration(connection, configuration)
     if validation_response is not None:
         return validation_response
 
     try:
-        drive_service, sheets_service, folder, spreadsheet = (
-            Validator.get_validated_workspace_resources(
+        google_drive_client, google_sheets_client, folder, spreadsheet = (
+            get_validated_workspace_resources(
                 connection,
                 configuration.root_folder_id,
                 configuration.spreadsheet_id,
             )
         )
-        import_state = GoogleResources.prepare_csv_import_folder(
-            drive_service, folder["id"], configuration
-        )
+        import_state = google_drive_client.prepare_csv_import_folder(folder["id"], configuration)
     except RefreshError:
         return JsonResponse(
             {
@@ -88,11 +94,11 @@ def _validate_csv_import_context(request):
         return JsonResponse({"error": str(error)}, status=502)
 
     return {
-        "drive_service": drive_service,
-        "sheets_service": sheets_service,
         "folder": folder,
         "spreadsheet": spreadsheet,
         "import_state": import_state,
+        "google_drive_client": google_drive_client,
+        "google_sheets_client": google_sheets_client,
     }
 
 def _csv_import_state_response(context):
@@ -169,8 +175,8 @@ def csv_import(request):
     spreadsheet = context["spreadsheet"]
     spreadsheet_id = spreadsheet["spreadsheetId"]
     
-    drive_service = context["drive_service"]
-    sheets_service = context["sheets_service"]
+    google_drive_client: GoogleDriveClient = context["google_drive_client"]
+    google_sheets_client: GoogleSheetsClient = context["google_sheets_client"]
     
     response = _csv_import_state_response(context)
     if response.status_code != 200:
@@ -182,8 +188,8 @@ def csv_import(request):
 
     for file in import_state["files"]:
         try:
-            content = GoogleResources.download_file_content(drive_service, file["id"])
-            parsed_file = CsvParser.parse_csv_content(
+            content = google_drive_client.download_file_content(file["id"])
+            parsed_file = parse_csv_content(
                 content,
                 file["name"],
                 expected_month=int(month),
@@ -222,33 +228,24 @@ def csv_import(request):
     try:
         for file in parsed_files:
             sheet_title = file["employee"]
-            GoogleSheetsHelper.create_sheet_if_not_exists(
-                sheets_service,
-                spreadsheet,
-                spreadsheet_id,
-                sheet_title,
-            )
+            google_sheets_client.create_sheet_if_not_exists(spreadsheet, spreadsheet_id, sheet_title,)
 
             # Refresh local spreadsheet dictionary
-            spreadsheet = sheets_service.spreadsheets().get(
-                spreadsheetId=spreadsheet_id,
-                fields="spreadsheetId,properties(title),sheets(properties(sheetId,title))",
-            ).execute()
+            spreadsheet = google_sheets_client.validate_spreadsheet(spreadsheet_id)
             
-            GoogleSheetsHelper.setup_sheet_headers_if_not_exists(
-                sheets_service,
+            google_sheets_client.setup_sheet_headers_if_not_exists(
                 spreadsheet_id,
                 sheet_title,
-                GoogleSheetsHelper.HEADERS["employee_headers"],
+                google_sheets_client.HEADERS["employee_headers"],
             )
             
-            imported_rows += GoogleSheetsHelper.replace_employee_entries(
-                sheets_service,
+            imported_rows += google_sheets_client.replace_employee_entries(
                 spreadsheet,
                 spreadsheet_id,
                 sheet_title,
                 file["entries"],
             )
+            
             imported_files.append(file)
     except HttpError as error:
         return JsonResponse(
@@ -264,7 +261,7 @@ def csv_import(request):
     archived_files = []
     for file in imported_files:
         try:
-            archived = GoogleSheetsHelper.archive_file(drive_service, file["id"], file["name"],)
+            archived = google_drive_client.archive_file(file["id"], file["name"])
             archived_files.append(archived.get("name", ""))
         except HttpError as error:
             archive_errors.append(
@@ -425,7 +422,6 @@ def setup(request):
         or not connection.encrypted_refresh_token
         or not connection.granted_scopes
     ):
-        print("Redirecting to connect because connection is missing or invalid.")
         return redirect("workspace:connect")
 
     configuration = (
@@ -447,10 +443,10 @@ def save_setup(request):
     
     try:
         payload = json.loads(request.body)
-        root_folder_id = GoogleResources.parse_resource_id(
+        root_folder_id = parse_resource_id(
             payload.get("root_folder_id", ""), "folder"
         )
-        spreadsheet_id = GoogleResources.parse_resource_id(
+        spreadsheet_id = parse_resource_id(
             payload.get("spreadsheet_id", ""), "spreadsheet"
         )
         period_month = int(payload.get("period_month", ""))
@@ -466,7 +462,7 @@ def save_setup(request):
     if not 2000 <= period_year <= 2099:
         return JsonResponse({"error": "The import year must be between 2000 and 2099."}, status=400)
 
-    configuration = WorkspaceConfiguration.objects.filter(owner=request.user).first()
+    configuration: WorkspaceConfiguration = WorkspaceConfiguration.objects.filter(owner=request.user).first()
     changed = configuration and (
         configuration.root_folder_id != root_folder_id
         or configuration.spreadsheet_id != spreadsheet_id
@@ -486,7 +482,7 @@ def save_setup(request):
     if not connection:
         return redirect("workspace:connect")
     
-    response = Validator.validate_folder_and_spreadsheet_ids(connection, root_folder_id, spreadsheet_id)
+    response = validate_folder_and_spreadsheet_ids(connection, root_folder_id, spreadsheet_id)
     response_data = json.loads(response.content)
     
     if response.status_code != 200:
@@ -523,3 +519,185 @@ def save_setup(request):
         status=200,
     )
 
+@login_required
+def sheets_preview(request):
+    overview_url = reverse("workspace:sheets-overview")
+    write_url = reverse("workspace:sheets-write")
+    return render(
+        request,
+        "workspace/sheets-preview.html",
+        {
+            "sheets_preview_overview_url": overview_url,
+            "sheets_preview_refresh_url": overview_url,
+            "sheets_preview_write_url": write_url,
+        },
+    )
+
+@login_required
+@require_GET
+def sheets_preview_overview(request):
+    connection: GoogleConnection = getattr(request.user, "google_connection", None)
+    configuration: WorkspaceConfiguration = getattr(request.user, "owned_workspace", None)
+    validation_response = validate_connection_and_configuration(connection, configuration)
+    if validation_response is not None:
+        return validation_response
+
+    try:
+        _, google_sheets_client, _, spreadsheet = get_validated_workspace_resources(
+            connection,
+            configuration.root_folder_id,
+            configuration.spreadsheet_id,
+        )
+    except RefreshError:
+        return JsonResponse(
+            {
+                "error": "Your Google connection has expired or been revoked. Please reconnect Google.",
+                "code": "google_reconnect_required",
+            },
+            status=401,
+        )
+    except PermissionError as error:
+        return JsonResponse({"error": str(error)}, status=403)
+    except ValueError as error:
+        return JsonResponse({"error": str(error)}, status=400)
+    except HttpError as error:
+        return JsonResponse({"error": str(error)}, status=502)
+
+    spreadsheet_id = spreadsheet["spreadsheetId"]
+    employees = {}
+    sheet_records = []
+
+    try:
+        for sheet in spreadsheet.get("sheets", []):
+            properties = sheet.get("properties", {})
+            sheet_title = properties.get("title")
+            if not sheet_title:
+                continue
+
+            raw_rows = google_sheets_client.read_sheet_values(spreadsheet_id, sheet_title)
+            employee = GoogleSheetsClient._find_employee_for_sheet(sheet_title)
+
+            # Google Sheets is the source of truth for daily activity. Rebuild
+            # the database summaries before reading them for the overview.
+            google_sheets_client._update_employee_summaries(
+                sheet_title,
+                raw_rows,
+                year=configuration.period_year,
+                month=configuration.period_month,
+            )
+
+            rows = [
+                sheets_preview_helpers._handle_row(row, row_index)
+                for row_index, row in enumerate(raw_rows)
+                if row and row[0]
+            ]
+            
+            employees[sheet_title.casefold()] = {
+                "name": sheet_title,
+                "sheetId": properties.get("sheetId"),
+                "rows": rows,
+            }
+            
+            sheet_records.append((employee, sheet_title, raw_rows))
+    except ValueError as error:
+        return JsonResponse({"error": str(error)}, status=400)
+    except HttpError as error:
+        return JsonResponse({"error": "The spreadsheet data could not be read.", "detail": str(error)}, status=502)
+
+    overview_rows = []
+    worked_hours = 0.0
+    vacation_days = 0.0
+    total_warning_count = 0
+
+    for employee, sheet_title, raw_rows in sheet_records:
+        month_record = EmployeeMonth.objects.filter(
+            employee=employee,
+            year=configuration.period_year,
+            month=configuration.period_month,
+        ).first()
+        
+        if month_record is None:
+            continue
+
+        warnings_str, individual_warning_count = sheets_preview_helpers._sheet_warnings(raw_rows)
+        worked_hours += float(month_record.worked_hours)
+        vacation_days += month_record.vacation_days_used
+        total_warning_count += individual_warning_count
+
+        overview_rows.append({
+            "employeeId": sheet_title.casefold(),
+            "employee": sheet_title,
+            "target": sheets_preview_helpers._hours(month_record.target_working_hours),
+            "worked": sheets_preview_helpers._hours(month_record.worked_hours),
+            "difference": sheets_preview_helpers._hours(month_record.hour_difference),
+            "opening": sheets_preview_helpers._hours(month_record.opening_hour_account_balance),
+            "closing": sheets_preview_helpers._hours(month_record.closing_hour_account_balance),
+            "vacation": sheets_preview_helpers._days(month_record.closing_vacation_balance),
+            "warnings": warnings_str,
+        })
+
+    return JsonResponse({
+        "data": {
+            "configuration_period": configuration.config_period_str,
+            "spreadsheetUrl": f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/edit",
+            "overview": {
+                "headers": [
+                    "Employee", "Target hours", "Worked hours", "Difference",
+                    "Opening balance", "Closing balance", "Vacation balance", "Warnings",
+                ],
+                "rows": overview_rows,
+            },
+            "employees": employees,
+        },
+    }, status=200)
+
+
+@login_required
+@require_POST
+def sheets_preview_write(request):
+    connection: GoogleConnection = getattr(request.user, "google_connection", None)
+    configuration: WorkspaceConfiguration = getattr(request.user, "owned_workspace", None)
+    validation_response = validate_connection_and_configuration(connection, configuration)
+    if validation_response is not None:
+        return validation_response
+
+    try:
+        _, google_sheets_client, _, spreadsheet = get_validated_workspace_resources(
+            connection,
+            configuration.root_folder_id,
+            configuration.spreadsheet_id,
+        )
+    except RefreshError:
+        return JsonResponse(
+            {
+                "error": "Your Google connection has expired or been revoked. Please reconnect Google.",
+                "code": "google_reconnect_required",
+            },
+            status=401,
+        )
+    except PermissionError as error:
+        return JsonResponse({"error": str(error)}, status=403)
+    except ValueError as error:
+        return JsonResponse({"error": str(error)}, status=400)
+    except HttpError as error:
+        return JsonResponse({"error": str(error)}, status=502)
+
+    spreadsheet_id = spreadsheet["spreadsheetId"]
+
+    payload = json.loads(request.body)
+    sheet_title = payload["employee_id"]
+
+    google_sheets_client.parse_manual_entry(payload, spreadsheet_id, sheet_title)
+    
+    return JsonResponse(
+        {
+            "status": "success",
+            "message": "The employee entry was saved successfully.",
+            "entry": {
+                "employee": sheet_title,
+                "date": payload.get("date"),
+                "type": payload.get("type"),
+            },
+        },
+        status=200,
+    )

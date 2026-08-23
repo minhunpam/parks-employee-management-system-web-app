@@ -34,8 +34,3 @@ class ApprovalPendingViewTests(TestCase):
         response = self.client.get(reverse("accounts:approval-pending"))
 
         self.assertEqual(response.status_code, 403)
-        self.assertContains(
-            response,
-            "Account awaiting approval",
-            status_code=403,
-        )

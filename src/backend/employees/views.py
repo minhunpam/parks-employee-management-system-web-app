@@ -196,7 +196,6 @@ def register(request):
         )
         registered_employee.full_clean()
     except (ValidationError) as error:
-        print("Something wrong with the employee itself")
         return JsonResponse({"error": error.message_dict}, status=400)
         
     registered_employee.save()

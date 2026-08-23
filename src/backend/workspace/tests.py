@@ -4,19 +4,24 @@ from unittest.mock import Mock, patch
 
 # Django modules
 from django.conf import settings
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
+from decimal import Decimal
 
 # Local modules
-from .google_resources import CsvParser, GoogleResources
+from .google_resources import parse_resource_id
+from .google_oauth import build_services
+from .csv_parser import handle_entries, public_holidays
+from .google_sheets_client import GoogleSheetsClient
+from employees.models import Employee, EmployeeMonth, EmployeeYear
 
 class ParseResourceIdTests(SimpleTestCase):
        def test_plain_folder_id(self):
-           result = GoogleResources.parse_resource_id("folder123", "folder")
+           result = parse_resource_id("folder123", "folder")
 
            self.assertEqual(result, "folder123")
 
        def test_folder_url(self):
-           result = GoogleResources.parse_resource_id(
+           result = parse_resource_id(
                "https://drive.google.com/drive/folders/folder123?usp=sharing",
                "folder",
            )
@@ -24,7 +29,7 @@ class ParseResourceIdTests(SimpleTestCase):
            self.assertEqual(result, "folder123")
 
        def test_spreadsheet_url(self):
-           result = GoogleResources.parse_resource_id(
+           result = parse_resource_id(
                "https://docs.google.com/spreadsheets/d/sheet456/edit",
                "spreadsheet",
            )
@@ -32,7 +37,7 @@ class ParseResourceIdTests(SimpleTestCase):
            self.assertEqual(result, "sheet456")
 
        def test_url_with_query_id(self):
-           result = GoogleResources.parse_resource_id(
+           result = parse_resource_id(
                "https://drive.google.com/open?id=resource789",
                "folder",
            )
@@ -41,7 +46,7 @@ class ParseResourceIdTests(SimpleTestCase):
 
        def test_empty_value_raises_error(self):
            with self.assertRaises(ValueError):
-               GoogleResources.parse_resource_id("", "folder")
+               parse_resource_id("", "folder")
 
        def test_invalid_url_raises_error(self):
            '''
@@ -49,7 +54,7 @@ class ParseResourceIdTests(SimpleTestCase):
            parsing and fails in the last condition
            '''
            with self.assertRaises(ValueError):
-               GoogleResources.parse_resource_id("https://example.com/file123", "folder")
+               parse_resource_id("https://example.com/file123", "folder")
 
 class CsvParserTests(SimpleTestCase):
     def test_minimum_break_is_added_after_six_hours(self):
@@ -63,7 +68,7 @@ class CsvParserTests(SimpleTestCase):
         '''
 
         
-        result = CsvParser._handle_entries(
+        result = handle_entries(
             {
                 "04.06.2026": [
                     {"start": "06:39", "end": "10:37", "remark": "19=Pause"},
@@ -80,7 +85,7 @@ class CsvParserTests(SimpleTestCase):
         self.assertEqual(result["warnings"], "P6")
 
     def test_zero_duration_pause_marker_is_not_work_time(self):
-        result = CsvParser._handle_entries(
+        result = handle_entries(
             {
                 "10.06.2026": [
                     {"start": "08:29", "end": "12:37", "remark": "18=Dienstschluß"},
@@ -97,33 +102,137 @@ class CsvParserTests(SimpleTestCase):
         self.assertEqual(result["warnings"], "")
 
     def test_missing_date_is_a_free_day(self):
-        result = CsvParser._handle_entries({"01.06.2026": []})["01.06.2026"]
+        result = handle_entries({"01.06.2026": []})["01.06.2026"]
 
         self.assertEqual(result["type_of_day"], "Frei")
         self.assertEqual(result["shift_total_time"], 0)
         self.assertEqual(result["warnings"], "")
 
     def test_public_holiday_is_marked_as_feiertag(self):
-        result = CsvParser._handle_entries(
+        result = handle_entries(
             {"06.04.2026": []},
-            holiday_dates=CsvParser._public_holidays(2026),
+            holiday_dates=public_holidays(2026),
         )["06.04.2026"]
 
         self.assertEqual(result["type_of_day"], "Feiertag")
 
     def test_worked_public_holiday_keeps_shift_data(self):
-        result = CsvParser._handle_entries(
+        result = handle_entries(
             {
                 "06.04.2026": [
                     {"start": "08:00", "end": "12:00", "remark": None},
                 ]
             },
-            holiday_dates=CsvParser._public_holidays(2026),
+            holiday_dates=public_holidays(2026),
         )["06.04.2026"]
 
         self.assertEqual(result["type_of_day"], "Feiertag")
         self.assertEqual(result["shift_start"], "08:00")
         self.assertEqual(result["shift_end"], "12:00")
+
+
+class GoogleSheetsSummaryPropagationTests(TestCase):
+    def setUp(self):
+        self.employee = Employee.objects.create(
+            first_name="Ademir",
+            last_name="Test",
+            email="ademir.test@example.com",
+            employment_start_date="2026-01-01",
+            monthly_target_hours=Decimal("173.00"),
+        )
+        self.year_2026 = EmployeeYear.objects.create(
+            employee=self.employee,
+            year=2026,
+            annual_allowed_vacation_days=25,
+            carried_over_vacation_days=2,
+        )
+        self.year_2027 = EmployeeYear.objects.create(
+            employee=self.employee,
+            year=2027,
+            annual_allowed_vacation_days=25,
+            carried_over_vacation_days=0,
+        )
+
+        self.november = EmployeeMonth.objects.create(
+            employee=self.employee,
+            year=2026,
+            month=11,
+            opening_hour_account_balance=Decimal("0.00"),
+            target_working_hours=Decimal("173.00"),
+            paid_absence_hours=Decimal("0.00"),
+            worked_hours=Decimal("176.00"),
+            opening_vacation_balance=Decimal("23.00"),
+            vacation_days_used=3,
+        )
+        self.january = EmployeeMonth.objects.create(
+            employee=self.employee,
+            year=2027,
+            month=1,
+            opening_hour_account_balance=Decimal("0.00"),
+            target_working_hours=Decimal("173.00"),
+            paid_absence_hours=Decimal("0.00"),
+            worked_hours=Decimal("160.00"),
+            opening_vacation_balance=22,
+            vacation_days_used=2,
+        )
+
+    def test_imported_december_updates_previous_and_later_balance_chain(self):
+        sheets_service = Mock()
+        client = GoogleSheetsClient(sheets_service)
+        spreadsheet = {
+            "sheets": [{"properties": {"sheetId": 123, "title": "Ademir"}}],
+        }
+        existing_december_rows = [
+            ["01.12.2026", "08:00", "", "", "16:30", "30", "8.00", "Arbeit", ""],
+            ["02.12.2026", "", "", "", "", "", "Frei", ""],
+        ]
+        imported_entries = {
+            "02.12.2026": {
+                "shift_start": "",
+                "pause_start": "",
+                "pause_end": "",
+                "shift_end": "",
+                "pause_minutes": 0,
+                "shift_total_time": 8.00,
+                "type_of_day": "Urlaub",
+                "warnings": "",
+            },
+        }
+
+        with patch.object(client, "read_sheet_values", return_value=existing_december_rows):
+            client.replace_employee_entries(
+                spreadsheet,
+                "spreadsheet-id",
+                "Ademir",
+                imported_entries,
+            )
+
+        december = EmployeeMonth.objects.get(
+            employee=self.employee,
+            year=2026,
+            month=12,
+        )
+        january = EmployeeMonth.objects.get(
+            employee=self.employee,
+            year=2027,
+            month=1,
+        )
+        self.year_2026.refresh_from_db()
+        self.year_2027.refresh_from_db()
+
+        self.assertEqual(december.opening_hour_account_balance, Decimal("3.00"))
+        self.assertEqual(december.worked_hours, Decimal("8.00"))
+        self.assertEqual(december.paid_absence_hours, Decimal("8.00"))
+        self.assertEqual(december.vacation_days_used, 1)
+        self.assertEqual(december.opening_vacation_balance, Decimal("20.00"))
+        self.assertEqual(december.closing_vacation_balance, Decimal("19.00"))
+
+        self.assertEqual(january.opening_hour_account_balance, december.closing_hour_account_balance)
+        self.assertEqual(january.opening_vacation_balance, Decimal("44.00"))
+        self.assertEqual(january.closing_vacation_balance, Decimal("42.00"))
+        self.assertEqual(self.year_2026.vacation_balance, 23)
+        self.assertEqual(self.year_2027.carried_over_vacation_days, 19)
+        self.assertEqual(self.year_2027.vacation_balance, 42)
 
 
 class BuildGoogleResourcesTests(SimpleTestCase):
@@ -141,18 +250,18 @@ class BuildGoogleResourcesTests(SimpleTestCase):
         fernet.decrypt.return_value = decrypted_token
 
         with (
-            patch("workspace.google_resources.Fernet", return_value=fernet) as fernet_class,
+            patch("workspace.google_oauth.Fernet", return_value=fernet) as fernet_class,
             patch(
-                "workspace.google_resources.Credentials",
+                "workspace.google_oauth.Credentials",
                 return_value=credentials,
             ) as credentials_class,
-            patch("workspace.google_resources.Request") as request_class,
+            patch("workspace.google_oauth.Request") as request_class,
             patch(
-                "workspace.google_resources.build",
+                "workspace.google_oauth.build",
                 side_effect=[drive_service, sheets_service],
             ) as build_class,
         ):
-            result = GoogleResources.build_services(connection)
+            result = build_services(connection)
 
         self.assertEqual(result, (drive_service, sheets_service))
 

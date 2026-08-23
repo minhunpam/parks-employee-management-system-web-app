@@ -1,3 +1,5 @@
+import { htmlInjectionProtection } from "../common.js";
+
 const page = document.querySelector("#employee-dashboard");
 const apiUrl = page.dataset.apiUrl;
 const employeeDetailsUrl = page.dataset.employeeDetailsUrl;
@@ -9,16 +11,6 @@ const state = {
   sort: "default",
   direction: "asc"
 };
-
-const htmlInjectionProtection = (value) =>
-  String(value ?? "").replace(/[&<>'"]/g, (char) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    "'": "&#39;",
-    '"': "&quot;"
-  }[char])
-);
 
 const searchField = document.querySelector("#search");
 

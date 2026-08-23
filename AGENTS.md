@@ -14,6 +14,7 @@
 - When writng, keep the format clean:
   - Don't span lines crazily
   - Don't add a great number of blank lines
+- When writing documentation, write it in a way that the readers understand the underlying principals and mechanism. Don't expose specific code (because that might change in the future)
 
 ## Where knowledge now lives
 - Read the source that answers the question being asked
@@ -33,4 +34,7 @@
 ### Design
 - Follow `docs/design/DESIGN.md` to develop UI. This file contrains rules and instructions to which the design of the whole project must adhere to assure the design consistency in every component
   - Besides, UI implemenation should also aim for scalability for new features (if possible) 
-- Follow `docs/design/pages/dashboard.md` to understand how the dashboard page should be structured
+- Follow `docs/design/pages/employee-dashboard.md` to understand how the dashboard page should be structured
+- Follow `docs/design/pages/employee-details.md` to understand how the employee details page should be structured
+- Follow `docs/desing/pages/employee-register.md` to understand how the emplyee registration page should be structured
+

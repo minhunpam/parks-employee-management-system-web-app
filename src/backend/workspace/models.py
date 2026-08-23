@@ -18,15 +18,21 @@ class WorkspaceConfiguration(models.Model):
         blank=True,
     )
 
-    period_month = models.PositiveSmallIntegerField(
-        null=True,
-        blank=True,
-    )
+    period_month = models.PositiveSmallIntegerField()
 
-    period_year = models.PositiveSmallIntegerField(
-        null=True,
-        blank=True,
-    )
+    period_year = models.PositiveSmallIntegerField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["spreadsheet_id", "period_month", "period_year"],
+                name="unique_spreadsheet_month_year",
+            )
+        ]
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def config_period_str(self):
+        return f"{self.period_month}/{self.period_year}"

@@ -96,7 +96,6 @@ form.addEventListener("submit", async (event) => {
     }
     
   } catch (error) {
-    console.log(error);
     employeeRegistrationStatus.textContent = "Something wrong happened and the developer has caught this!";
   }
 });
