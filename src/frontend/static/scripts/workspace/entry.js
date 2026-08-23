@@ -105,7 +105,6 @@ importCsvButton_Import.addEventListener("click", async () => {
   });
 
   const result = await response.json();
-  console.log(result);
 
   if (result.code === "google_reconnect_required" || response.status === 401) {
     importCsvStatus.textContent = result.error || "Please reconnect Google.";

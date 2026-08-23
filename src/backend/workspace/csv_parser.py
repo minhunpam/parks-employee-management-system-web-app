@@ -184,9 +184,8 @@ def handle_entries(
             elif pause_gap > 180:
                 warnings.append("LÜCKE")
 
-        pause_minutes = sum(
-            pause["minutes"] for pause in pause_windows
-        )
+        pause_minutes = sum(pause["minutes"] for pause in pause_windows)
+        
         pause_start = pause_windows[0]["start"] if pause_windows else ""
         pause_end = pause_windows[0]["end"] if pause_windows else ""
         working_minutes = max(shift_gross_minutes - pause_minutes, 0) # Avoid negative working minutes
@@ -221,9 +220,7 @@ def handle_entries(
 
             # Preserve the calculated working time while moving the end
             # time when a synthetic pause is inserted.
-            shift_end = minutes_to_time(
-                shift_start_minutes + working_minutes + pause_minutes
-            )
+            shift_end = minutes_to_time(shift_start_minutes + working_minutes + pause_minutes)
             warnings.append("P6")
 
         

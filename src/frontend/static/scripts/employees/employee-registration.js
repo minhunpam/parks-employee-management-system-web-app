@@ -76,7 +76,6 @@ async function registerEmployee(payload) {
 }
 
 form.addEventListener("submit", async (event) => {
-  console.log("Hello world!");
   event.preventDefault();
 
   const payload = Object.fromEntries(new FormData(form));
@@ -97,7 +96,6 @@ form.addEventListener("submit", async (event) => {
     }
     
   } catch (error) {
-    console.log(error);
     employeeRegistrationStatus.textContent = "Something wrong happened and the developer has caught this!";
   }
 });

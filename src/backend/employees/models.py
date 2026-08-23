@@ -157,7 +157,7 @@ class EmployeeMonth(models.Model):
         self.hour_difference = (
             self.credited_working_hours - self.target_working_hours
         )
-
+        
         self.closing_hour_account_balance = (
             self.opening_hour_account_balance + self.hour_difference
         )
@@ -165,6 +165,15 @@ class EmployeeMonth(models.Model):
         self.closing_vacation_balance = (
             self.opening_vacation_balance - self.vacation_days_used
         )
+
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None:
+            kwargs["update_fields"] = set(update_fields) | {
+                "credited_working_hours",
+                "hour_difference",
+                "closing_hour_account_balance",
+                "closing_vacation_balance",
+            }
 
         super().save(*args, **kwargs)
     

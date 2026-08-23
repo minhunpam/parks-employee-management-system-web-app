@@ -8,9 +8,10 @@ import calendar
 # Django modules
 from django.db import transaction
 from django.db.models import Q
+from django.http import JsonResponse
 
 # Local modules
-from .csv_parser import time_to_minutes
+from .csv_parser import time_to_minutes, minutes_to_time, public_holidays
 from employees.models import Employee, EmployeeMonth, EmployeeYear
 
 class GoogleSheetsClient:
@@ -130,6 +131,65 @@ class GoogleSheetsClient:
         ).execute()
 
         return response.get("values", [])
+
+    def parse_manual_entry(self, payload, spreadsheet_id, sheet_title):
+        sheet_id = payload.get("employee_id", "")
+        if not sheet_id:
+            return JsonResponse({"error": "employee_id is empty"}, status=400)
+
+        parsed_date = datetime.strptime(payload["date"], "%d.%m.%Y").date()
+        is_public_holiday = parsed_date in public_holidays(parsed_date.year)
+        
+        type_of_day = payload.get("type", "")    
+        shift_start = payload.get("start", "")
+        shift_end = payload.get("end", "")
+
+        pause_start = ""
+        pause_end = ""
+        warnings = ["Manuell"]
+        if type_of_day == "Arbeit" and shift_start and shift_end:
+            shift_start_minutes = time_to_minutes(shift_start)
+            shift_end_minutes = time_to_minutes(shift_end)
+            working_minutes = shift_end_minutes - shift_start_minutes
+            if working_minutes > 360:
+                pause_start_minutes = shift_start_minutes + 360
+                pause_end_minutes = pause_start_minutes + 30
+                pause_start = minutes_to_time(pause_start_minutes)
+                pause_end = minutes_to_time(pause_end_minutes)
+
+                shift_end = minutes_to_time(shift_start_minutes + working_minutes + 30)
+
+        if is_public_holiday and working_minutes != 0:
+            working_minutes *= 2
+            warnings.append("Feiertag-Arbeit")
+
+        write_values = [
+            shift_start, 
+            pause_start, 
+            pause_end, 
+            shift_end, 
+            30, 
+            round(working_minutes / 60, 2),
+            type_of_day,
+            ", ".join(dict.fromkeys(warnings)),
+        ]
+
+        row_index = payload.get("row_index", None)
+        if row_index is None:
+            return JsonResponse({"error": "row_index is empty"}, status=400)
+        row_number = row_index + 2
+        
+        response = self.sheets_service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range=f"{sheet_title}!B{row_number}:I{row_number}",
+            valueInputOption="RAW",
+            body={
+                "values": [write_values]
+            }
+        ).execute()
+
+        print(response)
+        
 
     @staticmethod
     def entries_to_rows(entries):
@@ -277,8 +337,9 @@ class GoogleSheetsClient:
             entry_warnings = str(row[8] if len(row) > 8 else "").split(",")
             
             if entry_type in paid_absence_types and not "Feiertag-Arbeit" in entry_warnings:
-                    paid_absence_hours += hours
-            worked_hours += hours
+                paid_absence_hours += hours
+            else:
+                worked_hours += hours
                 
             if entry_type == "Urlaub":
                 vacation_days_used += 1 

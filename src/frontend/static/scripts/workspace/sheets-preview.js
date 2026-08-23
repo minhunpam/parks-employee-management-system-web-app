@@ -30,7 +30,7 @@ const openEmployeeSheetLink = document.querySelector("#open-employee-sheet-link"
 
 const dialog = document.querySelector("#entry-dialog");
 const entryForm = document.querySelector("#entry-form");
-const entryDate = document.querySelector("entry-date");
+const entryDate = document.querySelector("#entry-date");
 const entryType = document.querySelector("#entry-type");
 const entryStart = document.querySelector("#entry-start");
 const entryEnd = document.querySelector("#entry-end");
@@ -152,7 +152,6 @@ async function loadData({ refresh = false } = {}) {
     const payload = await response.json();
     
     if (response.ok) {
-      console.log(payload);
       setLoadedData(payload.data || payload, Boolean(payload.external_change));
     }
     

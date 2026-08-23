@@ -616,8 +616,11 @@ def sheets_preview_overview(request):
             year=configuration.period_year,
             month=configuration.period_month,
         ).first()
+        
         if month_record is None:
             continue
+
+        print(month_record)
 
         warnings_str, individual_warning_count = sheets_preview_helpers._sheet_warnings(raw_rows)
         worked_hours += float(month_record.worked_hours)
@@ -686,7 +689,8 @@ def sheets_preview_write(request):
 
     payload = json.loads(request.body)
     sheet_title = payload["employee_id"]
-    print(payload)
+
+    google_sheets_client.parse_manual_entry(payload, spreadsheet_id, sheet_title)
     
     # {'employee_id': 'angelina', 'date': '2026-06-01', 'type': 'Arbeit', 'start': '00:12', 'end': '16:45', 'row_index': None}
 
