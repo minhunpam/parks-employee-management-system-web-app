@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="{% static 'css/output.css' %}">
     <script type="module" src="{% static 'scripts/employees/employee-dashboard.js' %}"></script>
 </head>
-<body class="min-h-screen bg-white font-sans text-[#1a1a1a] antialiased">
+<body class="flex flex-col min-h-screen bg-white font-sans text-[#1a1a1a] antialiased">
     <header class="bg-black text-white">
         <nav class="mx-auto flex h-16 max-w-7xl items-center justify-between px-6 lg:px-8" aria-label="Main navigation">
             <a href="{% url 'home' %}" class="text-xl font-bold tracking-[0.18em] text-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black">PARKS</a>
@@ -27,7 +27,7 @@
     </div>
 
     <main 
-        id="employee-dashboard" 
+        id="employee-dashboard" class="flex-1"
         data-api-url="{% url 'employees:employee-dashboard-data' %}"
         data-employee-details-url = "{% url 'employees:employee-details' employee_id=0 %}">
         <section class="bg-black text-white" aria-labelledby="dashboard-heading">
