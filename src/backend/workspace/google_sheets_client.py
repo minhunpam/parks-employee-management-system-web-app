@@ -147,32 +147,38 @@ class GoogleSheetsClient:
         pause_start = ""
         pause_end = ""
         warnings = ["Manuell"]
+        working_minutes = 0
+        pause_minutes = 0
+        
         if type_of_day == "Arbeit" and shift_start and shift_end:
             shift_start_minutes = time_to_minutes(shift_start)
             shift_end_minutes = time_to_minutes(shift_end)
             working_minutes = shift_end_minutes - shift_start_minutes
             if working_minutes > 360:
                 pause_start_minutes = shift_start_minutes + 360
-                pause_end_minutes = pause_start_minutes + 30
+                pause_end_minutes = pause_start_minutes + pause_minutes
                 pause_start = minutes_to_time(pause_start_minutes)
                 pause_end = minutes_to_time(pause_end_minutes)
-
-                shift_end = minutes_to_time(shift_start_minutes + working_minutes + 30)
-
-        if is_public_holiday and working_minutes != 0:
-            working_minutes *= 2
-            warnings.append("Feiertag-Arbeit")
+                shift_end = minutes_to_time(shift_start_minutes + working_minutes + pause_minutes)
+                
+            if is_public_holiday and working_minutes != 0:
+                working_minutes *= 2
+                warnings.append("Feiertag-Arbeit")
+        elif type_of_day == "Frei":
+            warnings.clear()
 
         write_values = [
             shift_start, 
             pause_start, 
             pause_end, 
             shift_end, 
-            30, 
+            pause_minutes, 
             round(working_minutes / 60, 2),
             type_of_day,
             ", ".join(dict.fromkeys(warnings)),
         ]
+
+        print(write_values)
 
         row_index = payload.get("row_index", None)
         if row_index is None:

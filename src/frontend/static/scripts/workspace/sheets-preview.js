@@ -154,8 +154,8 @@ async function loadData({ refresh = false } = {}) {
     if (response.ok) {
       setLoadedData(payload.data || payload, Boolean(payload.external_change));
     }
-    
-    syncStatus.textContent = payload.error;
+  
+    syncStatus.textContent.append(`\n${payload.error}`);
   } catch (error) {
     tableStatus.textContent = "Unable to load spreadsheet data.";
   } finally {
@@ -178,10 +178,24 @@ function openEntryDialog(row = null) {
 
   
   entryType.value = row?.type || "Arbeit";
-  if (entryType.value === "Arbeit") {
-    entryStart.setAttribute("required", true);
-    entryEnd.setAttribute("required", true);
-  }
+  
+  entryType.addEventListener("change", (event) => { 
+    const option = event.target.value;
+  
+    if (option === "Arbeit") {
+      entryStart.required = true;
+      entryEnd.required = true;
+      entryStart.disabled = false;
+      entryEnd.disabled = false;
+    }
+    else {
+      entryStart.required = false;
+      entryEnd.required = false;
+      entryStart.disabled = true;
+      entryEnd.disabled = true;
+    }
+  });
+  
   
   entryStart.value = row?.start !== "—" ? row?.start || "" : "";
   entryEnd.value = row?.end !== "—" ? row?.end || "" : "";
@@ -213,11 +227,7 @@ async function submitEntry(event) {
     end: entryEnd.value,
     row_index: row_index,
   };
-
-  if (!writeUrl) {
-    entryFormStatus.textContent = "Backend write endpoint is not connected yet. The form UI is ready.";
-    return;
-  }
+  console.log(payload);
 
   try {
     const response = await fetch(writeUrl, {

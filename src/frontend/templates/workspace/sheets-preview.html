@@ -141,17 +141,18 @@
                         <option value="Krankenstand">Krankenstand</option>
                         <option value="Feiertag">Feiertag</option>
                         <option value="Extern">Extern</option>
+                        <option value="Frei">Frei (RESET)</option>
                     </select>
                 </label>
                 
                 <label class="text-sm font-bold">
                     Start
-                    <input id="entry-start" name="start" type="time" class="mt-2 block h-11 w-full border border-[#cccccc] bg-white px-4 font-normal focus:border-2 focus:border-[#76b900] focus:outline-none">
+                    <input id="entry-start" name="start" type="time" class="mt-2 block h-11 w-full border border-[#cccccc] bg-white px-4 font-normal focus:border-2 enabled:focus:border-[#76b900] focus:outline-none disabled:text-[#cccccc]">
                 </label>
                 
                 <label class="text-sm font-bold">
                     End
-                    <input id="entry-end" name="end" type="time" class="mt-2 block h-11 w-full border border-[#cccccc] bg-white px-4 font-normal focus:border-2 focus:border-[#76b900] focus:outline-none">
+                    <input id="entry-end" name="end" type="time" class="mt-2 block h-11 w-full border border-[#cccccc] bg-white px-4 font-normal focus:border-2 enabled:focus:border-[#76b900] focus:outline-none disabled:text-[#cccccc]">
                 </label>
             </div>
             
