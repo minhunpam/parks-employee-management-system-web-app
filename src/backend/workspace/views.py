@@ -70,14 +70,14 @@ def _validate_csv_import_context(request):
         return validation_response
 
     try:
-        google_drive_client, google_sheets_client, folder, spreadsheet = (
+        google_drive_client, google_sheets_client, _, folder, spreadsheet = (
             get_validated_workspace_resources(
                 connection,
                 configuration.root_folder_id,
                 configuration.spreadsheet_id,
             )
         )
-        import_state = google_drive_client.prepare_csv_import_folder(folder["id"], configuration)
+        import_state = google_drive_client.prepare_csv_import_and_export_folders(folder["id"], configuration)
     except RefreshError:
         return JsonResponse(
             {
@@ -111,7 +111,7 @@ def _csv_import_state_response(context):
                 "status": "invalid_files",
                 "message": "Some CSV filenames do not follow the required convention.",
                 "folder": {
-                    "id": import_state["month_folder"]["id"],
+                    "id": import_state["month_import_folder"]["id"],
                     "name": import_state["folder_name"],
                 },
                 "invalid_files": import_state["invalid_files"],
@@ -128,7 +128,7 @@ def _csv_import_state_response(context):
                     "folder before importing."
                 ),
                 "folder": {
-                    "id": import_state["month_folder"]["id"],
+                    "id": import_state["month_import_folder"]["id"],
                     "name": import_state["folder_name"],
                 },
             },
@@ -139,7 +139,7 @@ def _csv_import_state_response(context):
         {
             "status": "ready",
             "folder": {
-                "id": import_state["month_folder"]["id"],
+                "id": import_state["month_import_folder"]["id"],
                 "name": import_state["folder_name"],
             },
             "files": [
@@ -543,7 +543,7 @@ def sheets_preview_overview(request):
         return validation_response
 
     try:
-        _, google_sheets_client, _, spreadsheet = get_validated_workspace_resources(
+        _, google_sheets_client, _, _, spreadsheet = get_validated_workspace_resources(
             connection,
             configuration.root_folder_id,
             configuration.spreadsheet_id,
@@ -662,7 +662,7 @@ def sheets_preview_write(request):
         return validation_response
 
     try:
-        _, google_sheets_client, _, spreadsheet = get_validated_workspace_resources(
+        _, google_sheets_client, _, _, spreadsheet = get_validated_workspace_resources(
             connection,
             configuration.root_folder_id,
             configuration.spreadsheet_id,

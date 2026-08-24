@@ -9,7 +9,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
-def build_services(connection):
+def _build_credentials(connection):
     refresh_token = Fernet(settings.FERNET_KEY).decrypt(
         connection.encrypted_refresh_token.encode()
     ).decode()
@@ -23,8 +23,14 @@ def build_services(connection):
         scopes=settings.DRIVE_SCOPES,
     )
     credentials.refresh(Request())
+    return credentials
+
+
+def build_services(connection):
+    credentials = _build_credentials(connection)
 
     return (
         build("drive", "v3", credentials=credentials, cache_discovery=False),
         build("sheets", "v4", credentials=credentials, cache_discovery=False),
+        build("gmail", "v1", credentials=credentials, cache_discovery=False),
     )

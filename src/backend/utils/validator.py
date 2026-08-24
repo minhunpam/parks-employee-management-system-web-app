@@ -11,7 +11,7 @@ from workspace.models import WorkspaceConfiguration
 from workspace.google_oauth import build_services
 from workspace.google_drive_client import GoogleDriveClient
 from workspace.google_sheets_client import GoogleSheetsClient
-
+from workspace.google_gmail_client import GoogleGmailClient
 
 def validate_connection_and_configuration(
     connection: GoogleConnection, 
@@ -54,14 +54,15 @@ def get_validated_workspace_resources(
     root_folder_id: str,
     spreadsheet_id: str,
 ):
-    drive_service, sheets_service = build_services(connection)
+    drive_service, sheets_service, gmail_service = build_services(connection)
     google_drive_client = GoogleDriveClient(drive_service)
     google_sheets_client = GoogleSheetsClient(sheets_service)
+    google_gmail_client = GoogleGmailClient(gmail_service)
     
     folder = google_drive_client.validate_drive_resources(root_folder_id, spreadsheet_id,)
     spreadsheet = google_sheets_client.validate_spreadsheet(spreadsheet_id)
     
-    return google_drive_client, google_sheets_client, folder, spreadsheet
+    return google_drive_client, google_sheets_client, google_gmail_client, folder, spreadsheet
 
 def validate_folder_and_spreadsheet_ids(
     connection: GoogleConnection,
@@ -69,7 +70,7 @@ def validate_folder_and_spreadsheet_ids(
     spreadsheet_id: str,
 ):
     try:
-        _, _, folder, spreadsheet = get_validated_workspace_resources(
+        _, _, _, folder, spreadsheet = get_validated_workspace_resources(
             connection, root_folder_id, spreadsheet_id
         )
         return JsonResponse(

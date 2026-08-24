@@ -156,6 +156,7 @@ DRIVE_SCOPES = [
     *GOOGLE_OAUTH_SCOPES,
     "https://www.googleapis.com/auth/drive",
     "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/gmail.send", 
 ]
 
 # This is used by the @login_required decorator 

@@ -245,6 +245,7 @@ class BuildGoogleResourcesTests(SimpleTestCase):
         credentials = Mock()
         drive_service = Mock()
         sheets_service = Mock()
+        gmail_service = Mock()
 
         fernet = Mock()
         fernet.decrypt.return_value = decrypted_token
@@ -258,15 +259,13 @@ class BuildGoogleResourcesTests(SimpleTestCase):
             patch("workspace.google_oauth.Request") as request_class,
             patch(
                 "workspace.google_oauth.build",
-                side_effect=[drive_service, sheets_service],
+                side_effect=[drive_service, sheets_service, gmail_service],
             ) as build_class,
         ):
             result = build_services(connection)
 
-        self.assertEqual(result, (drive_service, sheets_service))
+        self.assertEqual(result, (drive_service, sheets_service, gmail_service))
 
-        print(f"Type of drive service: {type(drive_service)}")
-        print(f"Type of sheets service: {type(sheets_service)}")
         
         fernet_class.assert_called_once_with(settings.FERNET_KEY)
         fernet.decrypt.assert_called_once_with(b"encrypted-token")
@@ -290,4 +289,46 @@ class BuildGoogleResourcesTests(SimpleTestCase):
             build_class.call_args_list[1].args,
             ("sheets", "v4"),
         )
+        self.assertEqual(
+            build_class.call_args_list[2].args,
+            ("gmail", "v1"),
+        )
+
+    def test_can_make_gmail_profile_request(self):
+        connection = SimpleNamespace(
+            encrypted_refresh_token="encrypted-token"
+        )
+        credentials = Mock()
+        gmail_service = Mock()
+        gmail_service.users.return_value.getProfile.return_value.execute.return_value = {
+            "emailAddress": "connected@example.com",
+        }
+
+        fernet = Mock()
+        fernet.decrypt.return_value = b"refresh-token"
+
+        with (
+            patch("workspace.google_oauth.Fernet", return_value=fernet),
+            patch("workspace.google_oauth.Credentials", return_value=credentials),
+            patch("workspace.google_oauth.Request"),
+            patch(
+                "workspace.google_oauth.build",
+                side_effect=[Mock(), Mock(), gmail_service],
+            ) as build_class,
+        ):
+            _, _, service = build_services(connection)
+            profile = service.users().getProfile(userId="me").execute()
+
+        self.assertEqual(profile["emailAddress"], "connected@example.com")
+        self.assertEqual(build_class.call_count, 3)
+        self.assertEqual(
+            build_class.call_args_list[2].args,
+            ("gmail", "v1"),
+        )
+        self.assertEqual(
+            build_class.call_args_list[2].kwargs,
+            {"credentials": credentials, "cache_discovery": False},
+        )
+        gmail_service.users.return_value.getProfile.assert_called_once_with(userId="me")
+        gmail_service.users.return_value.getProfile.return_value.execute.assert_called_once_with()
         

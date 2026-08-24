@@ -15,6 +15,7 @@ from employees.models import Employee
 
 class GoogleDriveClient:
     IMPORT_FOLDER_NAME: ClassVar[str] = "Import"
+    EXPORT_FOLDER_NAME: ClassVar[str] = "Export"
     CSV_FILENAME_URL_REGEX_PATTERN: ClassVar[re.Pattern] = re.compile(
         r"^Schicht_(?P<employee_firstname>.+)_(?P<month>[^_]+)_(?P<year>20\d{2})\.csv$"
     )
@@ -26,15 +27,18 @@ class GoogleDriveClient:
     def __init__(self, drive_service):
         self.drive_service = drive_service
 
-    def prepare_csv_import_folder(self, root_folder_id, configuration):
+    def prepare_csv_import_and_export_folders(self, root_folder_id, configuration):
         year = configuration.period_year
         
-        folder_name, german_month = self._get_import_folder_name_and_german_month(configuration)
-        import_folder, import_created = self._get_or_create_folder(root_folder_id, self.IMPORT_FOLDER_NAME)
-        month_folder, month_created = self._get_or_create_folder(import_folder["id"], folder_name)
-
+        folder_name, german_month = self._get_month_folder_name_and_german_month(configuration)
+        import_folder, import_folder_created = self._get_or_create_folder(root_folder_id, self.IMPORT_FOLDER_NAME)
+        export_folder, export_folder_created = self._get_or_create_folder(root_folder_id, self.EXPORT_FOLDER_NAME)
+        
+        month_import_folder, month_import_folder_created = self._get_or_create_folder(import_folder["id"], folder_name)
+        month_export_folder, month_export_folder_created = self._get_or_create_folder(export_folder["id"], folder_name)
+        
         files = [
-            item for item in self._drive_children(month_folder["id"])
+            item for item in self._drive_children(month_import_folder["id"])
             if (
                 item.get("name", "").lower().endswith(".csv")
                 and "[archived]" not in item.get("name", "").lower()
@@ -48,7 +52,7 @@ class GoogleDriveClient:
             match = re.fullmatch(self.CSV_FILENAME_URL_REGEX_PATTERN, item.get("name", ""))
             employee_firstname = match.group("employee_firstname")
             try:
-                employee = Employee.objects.get(first_name__iexact=employee_firstname)
+                _ = Employee.objects.get(first_name__iexact=employee_firstname)
             except ObjectDoesNotExist:
                 not_employee_list.append(employee_firstname)
             
@@ -67,12 +71,15 @@ class GoogleDriveClient:
 
         return {
             "import_folder": import_folder,
-            "month_folder": month_folder,
+            "month_import_folder": month_import_folder,
+            "month_export_folder": month_export_folder,
             "folder_name": folder_name,
             "german_month": german_month,
             "year": year,
-            "import_created": import_created,
-            "month_created": month_created,
+            "import_folder_created": import_folder_created,
+            "month_import_folder_created": month_import_folder_created,
+            "export_folder_created": export_folder_created,
+            "month_export_folder_created": month_export_folder_created,
             "files": valid_files,
             "invalid_files": invalid_files,
         }
@@ -173,7 +180,7 @@ class GoogleDriveClient:
         ).execute()
 
     @staticmethod
-    def _get_import_folder_name_and_german_month(configuration: WorkspaceConfiguration):
+    def _get_month_folder_name_and_german_month(configuration: WorkspaceConfiguration):
         month = configuration.period_month
         year = configuration.period_year
         
