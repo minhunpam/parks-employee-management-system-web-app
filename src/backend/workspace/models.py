@@ -22,6 +22,8 @@ class WorkspaceConfiguration(models.Model):
 
     period_year = models.PositiveSmallIntegerField()
 
+    manager_recipients = models.JSONField(default=list, blank=True)
+
     class Meta:
         constraints = [
             models.UniqueConstraint(

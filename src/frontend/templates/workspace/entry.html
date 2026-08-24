@@ -113,12 +113,23 @@
                         </div>
 
                         <div class="py-4">
-                            <dt class="text-xs font-bold uppercase tracking-wide text-[#757575]">Main spreadsheet</dt>
+                            <dt class="text-xs font-bold uppercase tracking-wide text-[#757575]">Manager recipients</dt>
+                            <dd class="mt-2 break-all text-sm font-bold">
+                                {% if configuration.manager_recipients %}
+                                    {{ configuration.manager_recipients|join:", " }}
+                                {% else %}
+                                    Not configured
+                                {% endif %}
+                            </dd>
+                        </div>
+
+                        <div class="py-4">
+                            <dt class="text-xs font-bold uppercase tracking-wide text-[#757575]">Import month</dt>
                             <dd class="mt-2 break-all text-sm font-bold">{{ configuration.period_month|default:"Not configured" }}</dd>
                         </div>
 
                         <div class="py-4">
-                            <dt class="text-xs font-bold uppercase tracking-wide text-[#757575]">Main spreadsheet</dt>
+                            <dt class="text-xs font-bold uppercase tracking-wide text-[#757575]">Import year</dt>
                             <dd class="mt-2 break-all text-sm font-bold">{{ configuration.period_year|default:"Not configured" }}</dd>
                         </div>
                     </dl>

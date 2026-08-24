@@ -35,6 +35,7 @@
         data-send-summary-url="{{ pdf_export_send_summary_url|default:'' }}"
         data-send-employees-url="{{ pdf_export_send_employees_url|default:'' }}"
         data-reconnect-url="{% url 'workspace:connect' %}"
+        data-setup-url="{% url 'workspace:setup' %}"
         data-period-month="{{ configuration.period_month|default:'' }}"
         data-period-year="{{ configuration.period_year|default:'' }}">
             
@@ -87,6 +88,7 @@
                     <ul id="manager-recipient-list" class="mt-5 divide-y divide-[#cccccc] border-y border-[#cccccc] text-sm">
                         <li class="py-3 text-[#757575]">Loading recipients…</li>
                     </ul>
+                    <a id="manager-recipient-setup-link" hidden href="{% url 'workspace:setup' %}" class="mt-4 inline-block text-sm font-bold text-[#0046a4] underline hover:text-black focus:outline-none focus:ring-2 focus:ring-[#76b900]">Configure manager recipients <span aria-hidden="true">→</span></a>
                 </aside>
             </div>
 
