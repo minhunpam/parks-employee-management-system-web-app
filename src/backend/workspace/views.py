@@ -651,7 +651,6 @@ def sheets_preview_overview(request):
         },
     }, status=200)
 
-
 @login_required
 @require_POST
 def sheets_preview_write(request):
@@ -701,3 +700,46 @@ def sheets_preview_write(request):
         },
         status=200,
     )
+
+@login_required
+@require_GET
+def pdf_export(request):
+    export_status_url = reverse("workspace:pdf-export-status")
+    
+    return render(
+        request, 
+        "workspace/pdf-export.html",
+        {
+            "pdf_export_status_url": export_status_url,
+        },
+    )
+
+@login_required
+@require_GET
+def pdf_export_status(request):
+    connection: GoogleConnection = getattr(request.user, "google_connection", None)
+    configuration: WorkspaceConfiguration = getattr(request.user, "owned_workspace", None)
+    validation_response = validate_connection_and_configuration(connection, configuration)
+    if validation_response is not None:
+        return validation_response
+
+    try:
+        _ = get_validated_workspace_resources(
+            connection,
+            configuration.root_folder_id,
+            configuration.spreadsheet_id,
+        )
+    except RefreshError:
+        return JsonResponse(
+            {
+                "error": "Your Google connection has expired or been revoked. Please reconnect Google.",
+                "code": "google_reconnect_required",
+            },
+            status=401,
+        )
+    except PermissionError as error:
+        return JsonResponse({"error": str(error)}, status=403)
+    except ValueError as error:
+        return JsonResponse({"error": str(error)}, status=400)
+    except HttpError as error:
+        return JsonResponse({"error": str(error)}, status=502)

@@ -11,6 +11,8 @@ from .views import (
     sheets_preview,
     sheets_preview_overview,
     sheets_preview_write,
+    pdf_export,
+    pdf_export_status,
 )
 
 app_name = "workspace"
@@ -26,4 +28,6 @@ urlpatterns = [
     path("sheets-preview/", sheets_preview, name="sheets-preview"),
     path("sheets-preview/api/overview", sheets_preview_overview, name="sheets-overview"),
     path("sheets-preview/api/write", sheets_preview_write, name="sheets-write"),
+    path("pdf-export/", pdf_export, name="pdf-export"),
+    path("pdf-export/api/status", pdf_export_status, name="pdf-export-status")
 ]
