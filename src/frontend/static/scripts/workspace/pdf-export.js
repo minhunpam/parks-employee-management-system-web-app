@@ -29,6 +29,7 @@ const generateButton = document.querySelector("#generate-button");
 const generationStatus = document.querySelector("#generation-status");
 
 const managerRecipientList = document.querySelector("#manager-recipient-list");
+const managerRecipientSetupLink = document.querySelector("#manager-recipient-setup-link");
 
 const summaryEmpty = document.querySelector("#summary-empty");
 const summaryViewerContainer = document.querySelector("#summary-viewer-container");
@@ -61,9 +62,6 @@ function setNotice(title, message, { reconnect = false, error = false } = {})
   reconnectGoogle.href = urls.reconnect || "#";
 }
 
-function payloadData(payload) {
-    return payload?.data || payload || {};
-}
 
 function statusLabel(value, fallback = "Not available") {
     return String(value || fallback).replaceAll("_", " ");
@@ -80,57 +78,69 @@ function statusClass(value) {
     return "text-[#757575]";
 }
 
-function setButtons() {
-    const hasSummary = Boolean(state.batch?.summary_pdf_url);
-    const exportReady = state.batch?.ready !== false;
+async function loadStatus() {
+  readinessStatus.textContent = "Checking export readiness…";
+  try {
+    const data = await requestJson(urls.status);
+    renderBatch(data);
 
-    generateButton.disabled = !urls.generate || !exportReady;
-    confirmButton.disabled = !hasSummary || !state.reviewed || state.confirmed || !urls.confirm;
-    sendSummaryButton.disabled = !state.confirmed || !urls.sendSummary;
-    sendEmployeesButton.disabled = !state.confirmed || !urls.sendEmployees;
-}
-
-function renderRecipients(recipients = []) {
-    if (!recipients.length) {
-        managerRecipientList.innerHTML = '<li class="py-3 text-[#e52020]">No manager recipients configured.</li>';
-        return;
+    if (data.code === "google_reconnect_required") {
+      setNotice(
+        "Reconnect Google is required",
+        data.error,
+        { reconnect: true });
+    } else {
+      setNotice();
     }
-
-    managerRecipientList.innerHTML = recipients.map((recipient) =>
-        `<li class="break-all py-3">${htmlInjectionProtection(recipient)}</li>`
-    ).join("");
+  } catch (error) {
+    readinessStatus.textContent = error.message;
+    setNotice("Export status unavailable", error.message, { error: true });
+    setButtons();
+  }
 }
 
-function renderEmployeeReports(reports = []) {
-    employeeReportEmpty.hidden = reports.length !== 0;
-    employeeReportList.hidden = reports.length === 0;
+async function requestJson(url, options = {}) {
+  if (!url) {
+    throw new Error("This action is not configured yet.");
+  }
 
-    employeeReportBody.innerHTML = reports.map((report) => {
-        const pdfLink = report.pdf_url
-            ? `<a href="${htmlInjectionProtection(report.pdf_url)}" target="_blank" rel="noopener" class="font-bold text-[#0046a4] underline hover:text-black">Open PDF <span aria-hidden="true">↗</span></a>`
-            : "—";
-        const details = report.error || report.delivery_error || "—";
-        return `<tr class="border-b border-[#cccccc] last:border-0 hover:bg-[#f7f7f7]">
-            <th scope="row" class="px-4 py-4 font-bold">${htmlInjectionProtection(report.employee || report.name)}</th>
-            <td class="px-4 py-4">${pdfLink}</td>
-            <td class="px-4 py-4 ${statusClass(report.generation_status)}">${htmlInjectionProtection(statusLabel(report.generation_status))}</td>
-            <td class="px-4 py-4 ${statusClass(report.delivery_status)}">${htmlInjectionProtection(statusLabel(report.delivery_status, "Not sent"))}</td>
-            <td class="max-w-xs px-4 py-4 text-[#757575]">${htmlInjectionProtection(details)}</td>
-        </tr>`;
-    }).join("");
+  const response = await fetch(url, {
+      ...options,
+      headers: {
+          Accept: "application/json",
+          ...(options.body ? { "Content-Type": "application/json", "X-CSRFToken": csrfToken() } : {}),
+          ...(options.headers || {}),
+      },
+  });
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+      const error = new Error(payload.error || payload.message || "The request could not be completed.");
+      error.code = payload.code;
+      throw error;
+  }
+
+  return payloadData(payload);
+}
+
+function payloadData(payload) {
+    return payload?.data || payload || {};
 }
 
 function renderBatch(data) {
   state.batch = data;
   state.confirmed = Boolean(data.confirmed);
   state.reviewed = Boolean(data.reviewed || state.reviewed);
+  console.log(state);
 
   periodTitle.textContent = data.period_label || data.configuration_period || "Configured month";
   readinessStatus.textContent = data.readiness_message || (data.ready === false
       ? "Export is blocked until the month is ready."
       : "The month is ready for export.");
+
   batchStatus.textContent = statusLabel(data.batch_status, data.summary_pdf_url ? "PDFs generated" : "No export generated");
   batchStatus.className = `inline-flex items-center self-start border px-3 py-2 text-xs font-bold uppercase tracking-wide ${statusClass(data.batch_status)}`;
+
   generationStatus.textContent = data.generation_message || "";
 
   renderRecipients(data.manager_recipients || []);
@@ -161,49 +171,46 @@ function renderBatch(data) {
   setButtons();
 }
 
-async function requestJson(url, options = {}) {
-  if (!url) {
-    throw new Error("This action is not configured yet.");
-  }
+function renderRecipients(recipients = []) {
+    if (!recipients.length) {
+        managerRecipientList.innerHTML = '<li class="py-3 text-[#e52020]">No manager recipients configured.</li>';
+        managerRecipientSetupLink.hidden = false;
+        return;
+    }
 
-  const response = await fetch(url, {
-      ...options,
-      headers: {
-          Accept: "application/json",
-          ...(options.body ? { "Content-Type": "application/json", "X-CSRFToken": csrfToken() } : {}),
-          ...(options.headers || {}),
-      },
-  });
-  const payload = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-      const error = new Error(payload.error || payload.message || "The request could not be completed.");
-      error.code = payload.code;
-      throw error;
-  }
-
-  return payloadData(payload);
+    managerRecipientSetupLink.hidden = true;
+    managerRecipientList.innerHTML = recipients.map((recipient) =>
+        `<li class="break-all py-3">${htmlInjectionProtection(recipient)}</li>`
+    ).join("");
 }
 
-async function loadStatus() {
-  readinessStatus.textContent = "Checking export readiness…";
-  try {
-    const data = await requestJson(urls.status);
-    renderBatch(data);
-    
-    if (data.code === "google_reconnect_required") {
-      setNotice(
-        "Reconnect Google is required",
-        data.error || "Reconnect Google to continue.",
-        { reconnect: true });
-    } else {
-      setNotice();
-    }
-  } catch (error) {
-    readinessStatus.textContent = error.message;
-    setNotice("Export status unavailable", error.message, { error: true });
-    setButtons();
-  }
+function renderEmployeeReports(reports = []) {
+    employeeReportEmpty.hidden = reports.length !== 0;
+    employeeReportList.hidden = reports.length === 0;
+
+    employeeReportBody.innerHTML = reports.map((report) => {
+        const pdfLink = report.pdf_url
+            ? `<a href="${htmlInjectionProtection(report.pdf_url)}" target="_blank" rel="noopener" class="font-bold text-[#0046a4] underline hover:text-black">Open PDF <span aria-hidden="true">↗</span></a>`
+            : "—";
+        const details = report.error || report.delivery_error || "—";
+        return `<tr class="border-b border-[#cccccc] last:border-0 hover:bg-[#f7f7f7]">
+            <th scope="row" class="px-4 py-4 font-bold">${htmlInjectionProtection(report.employee || report.name)}</th>
+            <td class="px-4 py-4">${pdfLink}</td>
+            <td class="px-4 py-4 ${statusClass(report.generation_status)}">${htmlInjectionProtection(statusLabel(report.generation_status))}</td>
+            <td class="px-4 py-4 ${statusClass(report.delivery_status)}">${htmlInjectionProtection(statusLabel(report.delivery_status, "Not sent"))}</td>
+            <td class="max-w-xs px-4 py-4 text-[#757575]">${htmlInjectionProtection(details)}</td>
+        </tr>`;
+    }).join("");
+}
+
+function setButtons() {
+    const hasSummary = Boolean(state.batch?.summary_pdf_url);
+    const exportReady = state.batch?.ready !== false;
+
+    generateButton.disabled = !urls.generate || !exportReady;
+    confirmButton.disabled = !hasSummary || !state.reviewed || state.confirmed || !urls.confirm;
+    sendSummaryButton.disabled = !state.confirmed || !urls.sendSummary;
+    sendEmployeesButton.disabled = !state.confirmed || !urls.sendEmployees;
 }
 
 async function generateReports() {

@@ -29,5 +29,5 @@ urlpatterns = [
     path("sheets-preview/api/overview", sheets_preview_overview, name="sheets-overview"),
     path("sheets-preview/api/write", sheets_preview_write, name="sheets-write"),
     path("pdf-export/", pdf_export, name="pdf-export"),
-    path("pdf-export/api/status", pdf_export_status, name="pdf-export-status")
+    path("pdf-export/api/status", pdf_export_status, name="pdf-export-status"),
 ]

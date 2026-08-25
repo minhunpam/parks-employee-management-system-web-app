@@ -106,11 +106,11 @@ form.addEventListener("submit", async (event) => {
     event.preventDefault();
 
     const managerRecipients = managerRecipientsInput.value
-        .split(/[\n,]+/)
-        .map((email) => email.trim())
-        .filter(Boolean);
+      .split(/[\n,]+/)
+      .map((email) => email.trim())
+      .filter(Boolean);
     const invalidRecipient = managerRecipients.find(
-        (email) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),
+      (email) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),
     );
     managerRecipientsError.textContent = invalidRecipient
         ? `Enter a valid email address: ${invalidRecipient}`

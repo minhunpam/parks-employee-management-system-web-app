@@ -12,6 +12,8 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.conf import settings
+from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
 
 # Google modules
 from google.auth.exceptions import GoogleAuthError, RefreshError
@@ -77,7 +79,7 @@ def _validate_csv_import_context(request):
                 configuration.spreadsheet_id,
             )
         )
-        import_state = google_drive_client.prepare_csv_import_and_export_folders(folder["id"], configuration)
+        import_state = google_drive_client.prepare_csv_import_folders(folder["id"], configuration)
     except RefreshError:
         return JsonResponse(
             {
@@ -105,7 +107,7 @@ def _csv_import_state_response(context):
     import_state = context["import_state"]
     spreadsheet = context["spreadsheet"]
 
-    if import_state["invalid_files"]:
+    if import_state["invalid_import_files"]:
         return JsonResponse(
             {
                 "status": "invalid_files",
@@ -114,12 +116,12 @@ def _csv_import_state_response(context):
                     "id": import_state["month_import_folder"]["id"],
                     "name": import_state["folder_name"],
                 },
-                "invalid_files": import_state["invalid_files"],
+                "invalid_files": import_state["invalid_import_files"],
             },
             status=422,
         )
 
-    if not import_state["files"]:
+    if not import_state["valid_import_files"]:
         return JsonResponse(
             {
                 "status": "awaiting_upload",
@@ -144,7 +146,7 @@ def _csv_import_state_response(context):
             },
             "files": [
                 {"id": file["id"], "name": file["name"]}
-                for file in import_state["files"]
+                for file in import_state["valid_import_files"]
             ],
             "spreadsheet": {
                 "id": spreadsheet["spreadsheetId"],
@@ -186,7 +188,7 @@ def csv_import(request):
     parsed_files = []
     errors = []
 
-    for file in import_state["files"]:
+    for file in import_state["valid_import_files"]:
         try:
             content = google_drive_client.download_file_content(file["id"])
             parsed_file = parse_csv_content(
@@ -451,7 +453,15 @@ def save_setup(request):
         )
         period_month = int(payload.get("period_month", ""))
         period_year = int(payload.get("period_year", ""))
-    except (ValueError, TypeError, json.JSONDecodeError) as error:
+        manager_recipients = payload.get("manager_recipients", [])
+        if not isinstance(manager_recipients, list):
+            raise ValueError("Manager recipients must be a list of email addresses.")
+        manager_recipients = list(dict.fromkeys(
+            email.strip() for email in manager_recipients if email.strip()
+        ))
+        for email in manager_recipients:
+            validate_email(email)
+    except (ValueError, TypeError, json.JSONDecodeError, ValidationError) as error:
         return JsonResponse(
             {"error": str(error)},
             status=400
@@ -468,6 +478,7 @@ def save_setup(request):
         or configuration.spreadsheet_id != spreadsheet_id
         or configuration.period_month != period_month
         or configuration.period_year != period_year
+        or configuration.manager_recipients != manager_recipients
     )
     if changed and payload.get("confirmation") != "CHANGE WORKSPACE CONFIG":
         return JsonResponse(
@@ -504,6 +515,7 @@ def save_setup(request):
     configuration.spreadsheet_id = spreadsheet_id
     configuration.period_month = period_month
     configuration.period_year = period_year
+    configuration.manager_recipients = manager_recipients
     configuration.save()
     
     return JsonResponse(
@@ -704,13 +716,42 @@ def sheets_preview_write(request):
 @login_required
 @require_GET
 def pdf_export(request):
-    export_status_url = reverse("workspace:pdf-export-status")
+    connection: GoogleConnection = getattr(request.user, "google_connection", None)
+    configuration: WorkspaceConfiguration = getattr(request.user, "owned_workspace", None)
+    validation_response = validate_connection_and_configuration(connection, configuration)
+    if validation_response is not None:
+        return validation_response
+
+    gmail_scope = "https://www.googleapis.com/auth/gmail.send"
+    if gmail_scope not in (connection.granted_scopes or []):
+        return JsonResponse(
+            {
+                "data": {
+                    "period_label": configuration.config_period_str,
+                    "period_month": configuration.period_month,
+                    "period_year": configuration.period_year,
+                    "ready": False,
+                    "readiness_message": "Reconnect Google to grant Gmail permission before sending reports.",
+                    "batch_status": "not_generated",
+                    "summary_pdf_url": None,
+                    "reviewed": False,
+                    "confirmed": False,
+                    "manager_recipients": configuration.manager_recipients,
+                    "employee_reports": [],
+                },
+                "code": "gmail_scope_required",
+                "error": "The Gmail send permission is missing.",
+            },
+            status=200,
+        )
     
+
     return render(
-        request, 
+        request,
         "workspace/pdf-export.html",
         {
-            "pdf_export_status_url": export_status_url,
+            "pdf_export_status_url": reverse("workspace:pdf-export-status"),
+            "configuration": getattr(request.user, "owned_workspace", None),
         },
     )
 
@@ -724,11 +765,13 @@ def pdf_export_status(request):
         return validation_response
 
     try:
-        _ = get_validated_workspace_resources(
+        google_drive_client, _, _, folder, spreadsheet = get_validated_workspace_resources(
             connection,
             configuration.root_folder_id,
             configuration.spreadsheet_id,
         )
+        import_state = google_drive_client.prepare_csv_import_folders(folder["id"], configuration)
+        export_state = google_drive_client.prepare_pdf_export_folders(folder["id"], configuration)
     except RefreshError:
         return JsonResponse(
             {
@@ -743,3 +786,57 @@ def pdf_export_status(request):
         return JsonResponse({"error": str(error)}, status=400)
     except HttpError as error:
         return JsonResponse({"error": str(error)}, status=502)
+
+    german_month = export_state["german_month"]
+    year = export_state["year"]
+    summary_file = export_state["summary_file"]
+    employee_export_files = export_state["employee_export_files"]
+
+    invalid_import_files = import_state["invalid_import_files"]
+    active_import_files = import_state["valid_import_files"]
+    ready = not invalid_import_files and not active_import_files
+    readiness_message = (
+        "The month is ready for export."
+        if ready
+        else "Export is blocked until the current month is imported successfully."
+    )
+
+    return JsonResponse(
+        {
+            "data": {
+                "period_label": f"{german_month} {year}",
+                "period_month": configuration.period_month,
+                "period_year": year,
+                "ready": ready,
+                "readiness_message": readiness_message,
+                "batch_status": "generated" if summary_file or employee_export_files else "not_generated",
+                "generation_message": "Existing export files found." if summary_file or employee_export_files else "No export generated.",
+                "summary_pdf_url": (
+                    f"https://drive.google.com/file/d/{summary_file['id']}/view"
+                    if summary_file else None
+                ),
+                "reviewed": False,
+                "confirmed": False,
+                "manager_recipients": configuration.manager_recipients,
+                "employee_reports": employee_export_files,
+                "summary_delivery": {
+                    "status": "not_sent",
+                    "message": "Review and confirm the summary first.",
+                    "sent_count": 0,
+                    "failed_count": 0,
+                },
+                "employee_delivery": {
+                    "status": "not_sent",
+                    "message": "Review and confirm the summary first.",
+                    "sent_count": 0,
+                    "failed_count": 0,
+                },
+                "delivery_message": "",
+                "spreadsheet": {
+                    "id": spreadsheet["spreadsheetId"],
+                    "name": spreadsheet.get("properties", {}).get("title"),
+                },
+            }
+        },
+        status=200,
+    )

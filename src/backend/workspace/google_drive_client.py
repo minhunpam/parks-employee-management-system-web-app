@@ -16,7 +16,7 @@ from employees.models import Employee
 class GoogleDriveClient:
     IMPORT_FOLDER_NAME: ClassVar[str] = "Import"
     EXPORT_FOLDER_NAME: ClassVar[str] = "Export"
-    CSV_FILENAME_URL_REGEX_PATTERN: ClassVar[re.Pattern] = re.compile(
+    IMPORT_CSV_FILENAME_REGEX_PATTERN: ClassVar[re.Pattern] = re.compile(
         r"^Schicht_(?P<employee_firstname>.+)_(?P<month>[^_]+)_(?P<year>20\d{2})\.csv$"
     )
     GERMAN_MONTHS: ClassVar[tuple[str, ...]] = (
@@ -27,15 +27,13 @@ class GoogleDriveClient:
     def __init__(self, drive_service):
         self.drive_service = drive_service
 
-    def prepare_csv_import_and_export_folders(self, root_folder_id, configuration):
+    def prepare_csv_import_folders(self, root_folder_id, configuration):
         year = configuration.period_year
         
         folder_name, german_month = self._get_month_folder_name_and_german_month(configuration)
         import_folder, import_folder_created = self._get_or_create_folder(root_folder_id, self.IMPORT_FOLDER_NAME)
-        export_folder, export_folder_created = self._get_or_create_folder(root_folder_id, self.EXPORT_FOLDER_NAME)
-        
         month_import_folder, month_import_folder_created = self._get_or_create_folder(import_folder["id"], folder_name)
-        month_export_folder, month_export_folder_created = self._get_or_create_folder(export_folder["id"], folder_name)
+        
         
         files = [
             item for item in self._drive_children(month_import_folder["id"])
@@ -45,25 +43,29 @@ class GoogleDriveClient:
             )
         ]
 
-        invalid_files = []
-        valid_files = []
+        invalid_import_files = []
+        valid_import_files = []
         not_employee_list = []
+        
         for item in files:
-            match = re.fullmatch(self.CSV_FILENAME_URL_REGEX_PATTERN, item.get("name", ""))
+            match = re.fullmatch(self.IMPORT_CSV_FILENAME_REGEX_PATTERN, item.get("name", ""))
+            if not match:
+                invalid_import_files.append(item.get("name", ""))
+                continue
+
             employee_firstname = match.group("employee_firstname")
             try:
                 _ = Employee.objects.get(first_name__iexact=employee_firstname)
             except ObjectDoesNotExist:
                 not_employee_list.append(employee_firstname)
-            
+
             if (
-                not match
-                or match.group("month") != german_month
+                match.group("month") != german_month
                 or int(match.group("year")) != year
             ):
-                invalid_files.append(item.get("name", ""))
+                invalid_import_files.append(item.get("name", ""))
             else:
-                valid_files.append(item)
+                valid_import_files.append(item)
 
         if not_employee_list:
             raise ValueError(f"This is the list of employee(s) who has/have been the offical staff {not_employee_list}. "
@@ -72,16 +74,62 @@ class GoogleDriveClient:
         return {
             "import_folder": import_folder,
             "month_import_folder": month_import_folder,
-            "month_export_folder": month_export_folder,
             "folder_name": folder_name,
             "german_month": german_month,
             "year": year,
             "import_folder_created": import_folder_created,
             "month_import_folder_created": month_import_folder_created,
+            "valid_import_files": valid_import_files,
+            "invalid_import_files": invalid_import_files,
+        }
+
+    def prepare_pdf_export_folders(self, root_folder_id, configuration):
+        year = configuration.period_year
+        
+        folder_name, german_month = self._get_month_folder_name_and_german_month(configuration)
+        export_folder, export_folder_created = self._get_or_create_folder(root_folder_id, self.EXPORT_FOLDER_NAME)
+
+        month_export_folder, month_export_folder_created = self._get_or_create_folder(export_folder["id"], folder_name)
+
+        export_files = [
+            item for item in self._drive_children(month_export_folder["id"])
+            if item.get("name", "").lower().endswith(".pdf")
+        ]
+        
+        summary_filename = f"Monatsübersicht_{german_month}_{year}_EXPORT.pdf"
+        summary_export_file = next(
+            (file for file in export_files if file.get("name") == summary_filename),
+            None,
+        )
+
+        employee_export_files = []
+        employee_filename_pattern = re.compile(
+            rf"^Schicht_(?P<employee>.+)_{german_month}_{year}_EXPORT\.pdf$"
+        )
+        for file in export_files:
+            match = employee_filename_pattern.fullmatch(file.get("name", ""))
+            if not match:
+                continue
+            employee_export_files.append(
+                {
+                    "employee": match.group("employee"),
+                    "pdf_url": f"https://drive.google.com/file/d/{file['id']}/view",
+                    "generation_status": "generated",
+                    "delivery_status": "not_sent",
+                    "error": None,
+                }
+            )
+        
+        return {
+            "export_folder": export_folder,
+            "month_export_folder": month_export_folder,
+            "folder_name": folder_name,
+            "german_month": german_month,
+            "year": year,
             "export_folder_created": export_folder_created,
             "month_export_folder_created": month_export_folder_created,
-            "files": valid_files,
-            "invalid_files": invalid_files,
+            "summary_export_file": summary_export_file,
+            "employee_export_files": employee_export_files,
         }
 
     def _get_or_create_folder(self, parent_id, name):
