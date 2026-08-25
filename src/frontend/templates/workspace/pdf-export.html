@@ -36,9 +36,7 @@
         data-send-employees-url="{{ pdf_export_send_employees_url|default:'' }}"
         data-reconnect-url="{% url 'workspace:connect' %}"
         data-setup-url="{% url 'workspace:setup' %}"
-        data-period-month="{{ configuration.period_month|default:'' }}"
-        data-period-year="{{ configuration.period_year|default:'' }}">
-            
+    >        
         <section class="bg-black text-white" aria-labelledby="export-heading">
             <div class="mx-auto flex max-w-7xl flex-col gap-8 px-6 py-14 lg:flex-row lg:items-end lg:justify-between lg:px-8 lg:py-16">
                 <div>
@@ -73,7 +71,7 @@
                     <h3 class="mt-2 text-2xl font-bold">Generate reports</h3>
                     <p class="mt-2 max-w-2xl text-sm leading-6 text-[#757575]">PARKS creates one complete summary PDF and one daily-entry PDF for each employee represented in this month’s synchronized data.</p>
                     <div class="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center">
-                        <button id="generate-button" type="button" class="inline-flex min-h-11 items-center justify-center border-2 enabled:border-[#76b900] enabled:bg-[#76b900] px-5 py-3 text-sm font-bold text-black transition enabled:hover:border-[#5a8d00] enabled:hover:bg-[#5a8d00] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black disabled:bg-[#5a8d00] disabled:border-[#5a8d00] disabled:cursor-not-allowed">
+                        <button id="generate-button" type="button" class="inline-flex min-h-11 items-center justify-center border-2 enabled:border-[#76b900] enabled:bg-[#76b900] px-5 py-3 text-sm font-bold text-black transition enabled:hover:border-[#5a8d00] enabled:hover:bg-[#5a8d00] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black disabled:bg-[#5a8d00] disabled:border-[#5a8d00] disabled:cursor-not-allowed" disabled>
                             Generate PDFs
                             <span class="ml-3" aria-hidden="true">→</span>
                         </button>

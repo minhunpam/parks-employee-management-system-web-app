@@ -751,7 +751,7 @@ def pdf_export(request):
         "workspace/pdf-export.html",
         {
             "pdf_export_status_url": reverse("workspace:pdf-export-status"),
-            "configuration": getattr(request.user, "owned_workspace", None),
+            "pdf_export_generate_url": reverse("workspace:pdf-export-generate"),
         },
     )
 
@@ -789,7 +789,7 @@ def pdf_export_status(request):
 
     german_month = export_state["german_month"]
     year = export_state["year"]
-    summary_file = export_state["summary_file"]
+    summary_export_file = export_state["summary_export_file"]
     employee_export_files = export_state["employee_export_files"]
 
     invalid_import_files = import_state["invalid_import_files"]
@@ -809,11 +809,11 @@ def pdf_export_status(request):
                 "period_year": year,
                 "ready": ready,
                 "readiness_message": readiness_message,
-                "batch_status": "generated" if summary_file or employee_export_files else "not_generated",
-                "generation_message": "Existing export files found." if summary_file or employee_export_files else "No export generated.",
+                "batch_status": "generated" if summary_export_file or employee_export_files else "not_generated",
+                "generation_message": "Existing export files found." if summary_export_file or employee_export_files else "No export generated.",
                 "summary_pdf_url": (
-                    f"https://drive.google.com/file/d/{summary_file['id']}/view"
-                    if summary_file else None
+                    f"https://drive.google.com/file/d/{summary_export_file['id']}/view"
+                    if summary_export_file else None
                 ),
                 "reviewed": False,
                 "confirmed": False,
@@ -837,6 +837,19 @@ def pdf_export_status(request):
                     "name": spreadsheet.get("properties", {}).get("title"),
                 },
             }
+        },
+        status=200,
+    )
+
+def pdf_export_generate(request):
+    configuration: WorkspaceConfiguration = getattr(request.user, "owned_workspace", None)
+
+    
+    
+    return JsonResponse(
+        {
+            "manager_recipients": configuration.manager_recipients,
+            "message": "success",
         },
         status=200,
     )
