@@ -14,6 +14,9 @@ from .views import (
     pdf_export,
     pdf_export_status,
     pdf_export_generate,
+    pdf_export_confirm,
+    pdf_export_send_summary,
+    pdf_export_send_employees,
 )
 
 app_name = "workspace"
@@ -32,4 +35,7 @@ urlpatterns = [
     path("pdf-export/", pdf_export, name="pdf-export"),
     path("pdf-export/api/status", pdf_export_status, name="pdf-export-status"),
     path("pdf-export/api/pdf-generate", pdf_export_generate, name="pdf-export-generate"),
+    path("pdf-export/api/confirm", pdf_export_confirm, name="pdf-export-confirm"),
+    path("pdf-export/api/send-summary", pdf_export_send_summary, name="pdf-export-send-summary"),
+    path("pdf-export/api/send-employees", pdf_export_send_employees, name="pdf-export-send-employees"),
 ]

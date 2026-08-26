@@ -25,8 +25,9 @@ from googleapiclient.errors import HttpError
 # Local modules
 from accounts.google_oauth import build_google_client_config
 from accounts.models import GoogleConnection
+from .google_gmail_client import GoogleGmailClient
 from .models import WorkspaceConfiguration
-from employees.models import EmployeeMonth
+from employees.models import Employee, EmployeeMonth
 from .google_resources import parse_resource_id
 from .csv_parser import parse_csv_content
 from utils.validator import (
@@ -36,6 +37,7 @@ from utils.validator import (
 )
 from .google_drive_client import GoogleDriveClient
 from .google_sheets_client import GoogleSheetsClient
+from .email_delivery import build_employee_email, build_manager_email
 from .pdf_exporter import build_snapshot, render_export_batch
 from . import sheets_helpers
 
@@ -753,6 +755,9 @@ def pdf_export(request):
         {
             "pdf_export_status_url": reverse("workspace:pdf-export-status"),
             "pdf_export_generate_url": reverse("workspace:pdf-export-generate"),
+            "pdf_export_confirm_url": reverse("workspace:pdf-export-confirm"),
+            "pdf_export_send_summary_url": reverse("workspace:pdf-export-send-summary"),
+            "pdf_export_send_employees_url": reverse("workspace:pdf-export-send-employees"),
         },
     )
 
@@ -913,3 +918,211 @@ def pdf_export_generate(request):
         "manager_recipients": configuration.manager_recipients,
         "employee_reports": employee_reports,
     }}, status=200)
+
+
+def _pdf_delivery_context(request):
+    connection: GoogleConnection = getattr(request.user, "google_connection", None)
+    configuration: WorkspaceConfiguration = getattr(request.user, "owned_workspace", None)
+    validation_response = validate_connection_and_configuration(connection, configuration)
+    if validation_response is not None:
+        return validation_response
+        
+    if not request.session.get(f"pdf_export_confirmed:{configuration.pk}"):
+        return JsonResponse(
+            {
+                "error": "Review and confirm the summary PDF first."
+            }, status=409
+        )
+        
+    drive_client, _, gmail_client, folder, _ = get_validated_workspace_resources(
+        connection, 
+        configuration.root_folder_id, 
+        configuration.spreadsheet_id
+    )
+    
+    export_state = drive_client.prepare_pdf_export_folders(folder["id"], configuration)
+    delivery_state = configuration.delivery_state or {}
+    period_key = f"{export_state['year']}-{configuration.period_month:02d}"
+    period_state = delivery_state.setdefault(period_key, {"summary": [], "employees": []})
+    
+    return {
+        "configuration": configuration, 
+        "drive_client": drive_client, 
+        "gmail_client": gmail_client, 
+        "export_state": export_state, 
+        "period_state": period_state, 
+        "delivery_state": delivery_state,
+    }
+
+def _save_delivery_state(configuration, state):
+    configuration.delivery_state = state
+    configuration.save(update_fields=["delivery_state", "updated_at"])
+
+
+@login_required
+@require_POST
+def pdf_export_confirm(request):
+    configuration = getattr(request.user, "owned_workspace", None)
+    if configuration is None:
+        return JsonResponse(
+            {
+                "error": "Workspace configuration is missing."
+            }, 
+            status=400
+        )
+        
+    request.session[f"pdf_export_confirmed:{configuration.pk}"] = True
+    return JsonResponse(
+        {
+            "data": 
+                {
+                    "reviewed": True, 
+                    "confirmed": True
+                }
+        }, 
+        status=200
+    )
+
+
+@login_required
+@require_POST
+def pdf_export_send_summary(request):    
+    context = _pdf_delivery_context(request)
+    if isinstance(context, JsonResponse):
+        return context
+
+    configuration = context["configuration"] 
+    drive_client: GoogleDriveClient = context["drive_client"] 
+    gmail_client: GoogleGmailClient = context["gmail_client"] 
+    export_state = context["export_state"] 
+    period_state = context["period_state"] 
+    delivery_state = context["delivery_state"]
+
+    summary_file = export_state["summary_export_file"]
+    recipients = configuration.manager_recipients or []
+    if not summary_file:
+        return JsonResponse({"error": "Generate the PDF reports before sending."}, status=409)
+    if not recipients:
+        return JsonResponse({"error": "No manager recipients are configured."}, status=400)
+        
+    content = drive_client.download_file_content(summary_file["id"])
+    results = []
+    for recipient in recipients:
+        if recipient in period_state["summary"]:
+            results.append(
+                {
+                    "recipient": recipient, 
+                    "status": "sent"
+                })
+            continue
+            
+        try:
+            email_message = build_manager_email(recipient, export_state["german_month"], export_state["year"], summary_file["name"], content)
+            response = gmail_client.send(email_message)
+            print(response)
+            period_state["summary"].append(recipient)
+            results.append(
+                {
+                    "recipient": recipient, 
+                    "status": "sent"
+                }
+            )
+            
+        except HttpError as error:
+            results.append(
+                {
+                    "recipient": recipient, 
+                    "status": "failed", 
+                    "error": error.content,
+                }
+            )
+            
+    _save_delivery_state(configuration, delivery_state)
+    failed = [result for result in results if result["status"] == "failed"]
+    print(failed)
+    
+    return JsonResponse(
+        {
+            "data": 
+                {
+                    "summary_delivery": 
+                        {
+                            "status": "failed" if failed else "sent", 
+                            "message": f"Sent to {len(results) - len(failed)} manager(s).", 
+                            "sent_count": len(results) - len(failed), 
+                            "failed_count": len(failed),
+                        }
+                }
+        }, 
+        status=200
+    )
+
+
+@login_required
+@require_POST
+def pdf_export_send_employees(request):
+    context = _pdf_delivery_context(request)
+    if isinstance(context, JsonResponse):
+        return context
+        
+    configuration = context["configuration"] 
+    drive_client: GoogleDriveClient = context["drive_client"] 
+    gmail_client: GoogleGmailClient = context["gmail_client"] 
+    export_state = context["export_state"] 
+    period_state = context["period_state"] 
+    delivery_state = context["delivery_state"]
+    
+    results = []
+    for report in export_state["employee_export_files"]:
+        employee = Employee.objects.filter(first_name__iexact=report["employee"]).first()
+        
+        if employee is None or not employee.email:
+            results.append({"employee": report["employee"], "status": "failed", "error": "Employee email is missing."})
+            continue
+            
+        employee_key = str(employee.pk)
+        if employee_key in period_state["employees"]:
+            results.append({"employee": report["employee"], "status": "sent"})
+            continue
+        try:
+            content = drive_client.download_file_content(report["file_id"])
+            email_message = build_employee_email(
+                employee, 
+                export_state["german_month"], 
+                export_state["year"], 
+                report.get("name", f"Schicht_{employee.first_name}_{export_state['german_month']}_{export_state['year']}_EXPORT.pdf"), 
+                content
+            )
+            gmail_client.send(email_message)
+            period_state["employees"].append(employee_key)
+            results.append(
+                {
+                    "employee": report["employee"], 
+                    "status": "sent"
+                }
+            )
+            
+        except HttpError as error:
+            results.append(
+                {
+                    "employee": report["employee"], 
+                    "status": "failed", 
+                    "error": error.content,
+                }
+            )
+            
+    _save_delivery_state(configuration, delivery_state)
+    failed = [result for result in results if result["status"] == "failed"]
+    return JsonResponse(
+        {
+            "data": 
+                {
+                    "employee_delivery": 
+                        {
+                            "status": "failed" if failed else "sent", "message": f"Sent to {len(results) - len(failed)} employee(s).", 
+                            "sent_count": len(results) - len(failed), "failed_count": len(failed)
+                        }
+                }
+        }, 
+        status=200
+    )

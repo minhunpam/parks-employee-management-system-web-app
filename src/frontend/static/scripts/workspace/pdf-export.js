@@ -252,7 +252,7 @@ async function confirmReview() {
 
 async function sendReports(url, button, statusElement, message) {
     button.disabled = true;
-    statusElement.textContent = `${message}…`;
+    statusElement.textContent = `${message}...`;
 
     try {
         const data = await requestJson(url, { method: "POST", body: JSON.stringify({}) });

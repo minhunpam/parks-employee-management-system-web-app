@@ -23,6 +23,7 @@ class WorkspaceConfiguration(models.Model):
     period_year = models.PositiveSmallIntegerField()
 
     manager_recipients = models.JSONField(default=list, blank=True)
+    delivery_state = models.JSONField(default=dict, blank=True)
 
     class Meta:
         constraints = [
