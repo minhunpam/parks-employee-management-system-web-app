@@ -104,16 +104,21 @@
                     <h4 class="text-xl font-bold">Summary PDF not generated</h4>
                     <p class="mt-2 text-sm text-[#757575]">Generate the reports to begin the mandatory review.</p>
                 </div>
-                <div id="summary-viewer-container" hidden class="mt-6 border border-[#cccccc] bg-[#f7f7f7] p-3 sm:p-5">
-                    <iframe id="summary-pdf-viewer" title="Manager summary PDF preview" class="h-[75vh] min-h-[32rem] w-full border border-[#cccccc] bg-white" src="about:blank"></iframe>
+                <div id="summary-review-container" hidden class="mt-6 border border-[#cccccc] bg-[#f7f7f7] p-3 sm:p-5">
                     <div class="mt-5 flex flex-col gap-4 border-t border-[#cccccc] pt-5 sm:flex-row sm:items-center sm:justify-between">
-                        <a id="summary-download-link" href="#" target="_blank" rel="noopener" class="text-sm font-bold text-[#0046a4] underline hover:text-black">Open or download summary PDF <span aria-hidden="true">↗</span></a>
+                        <a id="summary-download-link" href="#" target="_blank" rel="noopener" class="text-sm font-bold text-[#0046a4] underline hover:text-black">
+                            Open or download summary PDF
+                            <span aria-hidden="true">↗</span>
+                        </a>
                         <label class="flex items-start gap-3 text-sm font-bold">
-                            <input id="summary-review-checkbox" type="checkbox" class="mt-1 h-4 w-4 accent-[#76b900]">
+                            <input id="summary-review-checkbox" type="checkbox" class="h-4 w-4 accent-[#76b900]">
                             <span>I reviewed the summary PDF and confirm that this export is ready to send.</span>
                         </label>
                     </div>
-                    <button id="confirm-button" type="button" disabled class="mt-5 inline-flex min-h-11 items-center justify-center border-2 border-[#76b900] bg-[#76b900] px-6 py-3 text-base font-bold text-black transition hover:border-[#5a8d00] hover:bg-[#5a8d00] focus:outline-none focus:ring-2 focus:ring-[#76b900] disabled:cursor-not-allowed disabled:border-[#cccccc] disabled:bg-[#f7f7f7] disabled:text-[#a7a7a7]">Confirm reviewed export <span class="ml-3" aria-hidden="true">→</span></button>
+                    <button id="confirm-button" type="button" disabled class="mt-5 inline-flex min-h-11 items-center justify-center border-2 border-[#76b900] bg-[#76b900] px-6 py-3 text-base font-bold text-black transition hover:border-[#5a8d00] hover:bg-[#5a8d00] focus:outline-none focus:ring-2 focus:ring-[#76b900] disabled:cursor-not-allowed disabled:border-[#cccccc] disabled:bg-[#f7f7f7] disabled:text-[#a7a7a7]">
+                        Confirm reviewed export
+                        <span class="ml-3" aria-hidden="true">→</span>
+                    </button>
                 </div>
             </section>
 

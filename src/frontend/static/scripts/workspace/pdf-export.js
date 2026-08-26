@@ -32,12 +32,13 @@ const managerRecipientList = document.querySelector("#manager-recipient-list");
 const managerRecipientSetupLink = document.querySelector("#manager-recipient-setup-link");
 
 const summaryEmpty = document.querySelector("#summary-empty");
-const summaryViewerContainer = document.querySelector("#summary-viewer-container");
-const summaryPdfViewer = document.querySelector("#summary-pdf-viewer");
+const summaryReviewContainer = document.querySelector("#summary-review-container");
 const summaryDownloadLink = document.querySelector("#summary-download-link");
 const summaryReviewCheckbox = document.querySelector("#summary-review-checkbox");
-const reviewStatus = document.querySelector("#review-status");
+
 const confirmButton = document.querySelector("#confirm-button");
+
+const reviewStatus = document.querySelector("#review-status");
 const employeeReportEmpty = document.querySelector("#employee-report-empty");
 const employeeReportList = document.querySelector("#employee-report-list");
 const employeeReportBody = document.querySelector("#employee-report-body");
@@ -131,7 +132,6 @@ function renderBatch(data) {
   state.batch = data;
   state.confirmed = Boolean(data.confirmed);
   state.reviewed = Boolean(data.reviewed || state.reviewed);
-  console.log(state);
 
   periodTitle.textContent = data.period_label || data.configuration_period || "Configured month";
   readinessStatus.textContent = data.readiness_message || (data.ready === false
@@ -147,15 +147,13 @@ function renderBatch(data) {
 
   if (data.summary_pdf_url) {
       summaryEmpty.hidden = true;
-      summaryViewerContainer.hidden = false;
-      summaryPdfViewer.src = data.summary_pdf_url;
+      summaryReviewContainer.hidden = false;
       summaryDownloadLink.href = data.summary_pdf_url;
       reviewStatus.textContent = state.confirmed ? "Review confirmed" : "Review required";
       reviewStatus.className = `border px-3 py-2 text-xs font-bold uppercase tracking-wide ${state.confirmed ? "border-[#3f8500] text-[#3f8500]" : "border-[#cccccc] text-[#757575]"}`;
   } else {
       summaryEmpty.hidden = false;
-      summaryViewerContainer.hidden = true;
-      summaryPdfViewer.src = "about:blank";
+      summaryReviewContainer.hidden = true;
       summaryDownloadLink.href = "#";
       reviewStatus.textContent = "Review required";
   }
@@ -270,8 +268,9 @@ async function sendReports(url, button, statusElement, message) {
 }
 
 summaryReviewCheckbox.addEventListener("change", () => {
-    state.reviewed = summaryReviewCheckbox.checked;
-    setButtons();
+  state.reviewed = summaryReviewCheckbox.checked;
+  console.log(state);
+  setButtons();
 });
 
 

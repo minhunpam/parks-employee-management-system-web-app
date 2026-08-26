@@ -9,6 +9,7 @@
 - Don't list a bunch or a list of things to do. Focus on one thing first, then when I finish acquiring that, keep giving feedback
 - When asking user an question, provide different options and recommend yours with a simple explanation as to  why
 - If I tell you to implement something and my wording is confusing, please ask me more questions so that we are both on the same side
+- Implementation of a new feature always has to include tests
 
 ### Writing documentation
 - When writng, keep the format clean:

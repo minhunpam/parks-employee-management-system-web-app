@@ -14,6 +14,7 @@ from pathlib import Path
 import os
 from django.conf import STATICFILES_STORAGE_ALIAS
 from dotenv import load_dotenv
+from django.utils import timezone
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -117,7 +118,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Europe/Vienna'
 
 USE_I18N = True
 
@@ -167,6 +168,7 @@ FERNET_KEY = os.environ["FERNET_KEY"]
 
 
 if __name__ == "__main__":
-    print(f"Base Directory: {BASE_DIR.parent.parent}")
-    print(f"DIRS: {TEMPLATES[0].get("DIRS")[0]}")
-    print(f"STATICFILES_DIRS: {STATICFILES_DIRS[0]}")
+    # print(f"Base Directory: {BASE_DIR.parent.parent}")
+    # print(f"DIRS: {TEMPLATES[0].get("DIRS")[0]}")
+    # print(f"STATICFILES_DIRS: {STATICFILES_DIRS[0]}")
+    pass

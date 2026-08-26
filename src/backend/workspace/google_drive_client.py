@@ -7,7 +7,7 @@ from typing import ClassVar
 from django.core.exceptions import ObjectDoesNotExist
 
 # Google modules
-from googleapiclient.http import MediaIoBaseDownload
+from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 
 # Local modules
 from .models import WorkspaceConfiguration
@@ -131,6 +131,29 @@ class GoogleDriveClient:
             "summary_export_file": summary_export_file,
             "employee_export_files": employee_export_files,
         }
+
+    def upload_or_replace_pdf(self, folder_id, filename, content):
+        existing = next(
+            (file for file in self._drive_children(folder_id) if file.get("name") == filename),
+            None,
+        )
+        media = MediaIoBaseUpload(io.BytesIO(content), mimetype="application/pdf", resumable=False)
+        if existing:
+            return self.drive_service.files().update(
+                fileId=existing["id"],
+                media_body=media,
+                fields="id,name,mimeType",
+            ).execute()
+
+        return self.drive_service.files().create(
+            body={
+                "name": filename,
+                "parents": [folder_id],
+                "mimeType": "application/pdf"
+            },
+            media_body=media,
+            fields="id,name,mimeType",
+        ).execute()
 
     def _get_or_create_folder(self, parent_id, name):
         is_created = True

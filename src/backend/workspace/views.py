@@ -36,7 +36,8 @@ from utils.validator import (
 )
 from .google_drive_client import GoogleDriveClient
 from .google_sheets_client import GoogleSheetsClient
-from . import sheets_preview_helpers
+from .pdf_exporter import build_snapshot, render_export_batch
+from . import sheets_helpers
 
 @login_required
 def entry(request):
@@ -599,7 +600,7 @@ def sheets_preview_overview(request):
             )
 
             rows = [
-                sheets_preview_helpers._handle_row(row, row_index)
+                sheets_helpers._handle_row(row, row_index)
                 for row_index, row in enumerate(raw_rows)
                 if row and row[0]
             ]
@@ -631,7 +632,7 @@ def sheets_preview_overview(request):
         if month_record is None:
             continue
 
-        warnings_str, individual_warning_count = sheets_preview_helpers._sheet_warnings(raw_rows)
+        warnings_str, individual_warning_count = sheets_helpers._sheet_warnings(raw_rows)
         worked_hours += float(month_record.worked_hours)
         vacation_days += month_record.vacation_days_used
         total_warning_count += individual_warning_count
@@ -639,12 +640,12 @@ def sheets_preview_overview(request):
         overview_rows.append({
             "employeeId": sheet_title.casefold(),
             "employee": sheet_title,
-            "target": sheets_preview_helpers._hours(month_record.target_working_hours),
-            "worked": sheets_preview_helpers._hours(month_record.worked_hours),
-            "difference": sheets_preview_helpers._hours(month_record.hour_difference),
-            "opening": sheets_preview_helpers._hours(month_record.opening_hour_account_balance),
-            "closing": sheets_preview_helpers._hours(month_record.closing_hour_account_balance),
-            "vacation": sheets_preview_helpers._days(month_record.closing_vacation_balance),
+            "target": sheets_helpers._hours(month_record.target_working_hours),
+            "worked": sheets_helpers._hours(month_record.worked_hours),
+            "difference": sheets_helpers._hours(month_record.hour_difference),
+            "opening": sheets_helpers._hours(month_record.opening_hour_account_balance),
+            "closing": sheets_helpers._hours(month_record.closing_hour_account_balance),
+            "vacation": sheets_helpers._days(month_record.closing_vacation_balance),
             "warnings": warnings_str,
         })
 
@@ -841,15 +842,74 @@ def pdf_export_status(request):
         status=200,
     )
 
+@login_required
+@require_POST
 def pdf_export_generate(request):
+    connection: GoogleConnection = getattr(request.user, "google_connection", None)
     configuration: WorkspaceConfiguration = getattr(request.user, "owned_workspace", None)
+    validation_response = validate_connection_and_configuration(connection, configuration)
+    if validation_response is not None:
+        return validation_response
 
-    
-    
-    return JsonResponse(
-        {
-            "manager_recipients": configuration.manager_recipients,
-            "message": "success",
-        },
-        status=200,
-    )
+    try:
+        google_drive_client, google_sheets_client, _, folder, spreadsheet = get_validated_workspace_resources(
+            connection,
+            configuration.root_folder_id,
+            configuration.spreadsheet_id,
+        )
+
+        import_state = google_drive_client.prepare_csv_import_folders(folder["id"], configuration)
+        if import_state["invalid_import_files"] or import_state["valid_import_files"]:
+            return JsonResponse(
+                {"error": "PDF generation is blocked until the current month is imported successfully."},
+                status=409,
+            )
+
+        export_state = google_drive_client.prepare_pdf_export_folders(folder["id"], configuration)
+
+        snapshot = build_snapshot(spreadsheet, google_sheets_client, configuration.spreadsheet_id, configuration)
+        batch = render_export_batch(snapshot, export_state["german_month"])
+
+        summary_file = google_drive_client.upload_or_replace_pdf(
+            export_state["month_export_folder"]["id"], batch["summary"]["filename"], batch["summary"]["content"],
+        )
+        
+        employee_reports = []
+        for report in batch["employees"]:
+            uploaded = google_drive_client.upload_or_replace_pdf(
+                export_state["month_export_folder"]["id"], report["filename"], report["content"],
+            )
+            
+            employee_reports.append({
+                "employee": f"{report['employee'].first_name} {report['employee'].last_name}",
+                "pdf_url": f"https://drive.google.com/file/d/{uploaded['id']}/view",
+                "generation_status": "generated",
+                "delivery_status": "not_sent",
+                "error": None,
+            })
+    except RefreshError:
+        return JsonResponse(
+            {"error": "Your Google connection has expired or been revoked.", "code": "google_reconnect_required"},
+            status=401,
+        )
+    except PermissionError as error:
+        return JsonResponse({"error": str(error)}, status=403)
+    except ValueError as error:
+        return JsonResponse({"error": str(error)}, status=400)
+    except HttpError as error:
+        return JsonResponse({"error": str(error)}, status=502)
+
+    return JsonResponse({"data": {
+        "period_label": f"{export_state['german_month']} {export_state['year']}",
+        "period_month": configuration.period_month,
+        "period_year": configuration.period_year,
+        "ready": True,
+        "readiness_message": "The month is ready for export.",
+        "batch_status": "generated",
+        "generation_message": "PDFs generated successfully.",
+        "summary_pdf_url": f"https://drive.google.com/file/d/{summary_file['id']}/view",
+        "reviewed": False,
+        "confirmed": False,
+        "manager_recipients": configuration.manager_recipients,
+        "employee_reports": employee_reports,
+    }}, status=200)
