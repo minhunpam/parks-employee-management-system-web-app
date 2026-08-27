@@ -625,7 +625,7 @@ def sheets_preview_overview(request):
     total_warning_count = 0
 
     for employee, sheet_title, raw_rows in sheet_records:
-        month_record = EmployeeMonth.objects.filter(
+        month_record: EmployeeMonth = EmployeeMonth.objects.filter(
             employee=employee,
             year=configuration.period_year,
             month=configuration.period_month,
@@ -643,7 +643,7 @@ def sheets_preview_overview(request):
             "employeeId": sheet_title.casefold(),
             "employee": sheet_title,
             "target": sheets_helpers._hours(month_record.target_working_hours),
-            "worked": sheets_helpers._hours(month_record.worked_hours),
+            "credited_working_hours": sheets_helpers._hours(month_record.credited_working_hours),
             "difference": sheets_helpers._hours(month_record.hour_difference),
             "opening": sheets_helpers._hours(month_record.opening_hour_account_balance),
             "closing": sheets_helpers._hours(month_record.closing_hour_account_balance),
@@ -657,8 +657,8 @@ def sheets_preview_overview(request):
             "spreadsheetUrl": f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/edit",
             "overview": {
                 "headers": [
-                    "Employee", "Target hours", "Worked hours", "Difference",
-                    "Opening balance", "Closing balance", "Vacation balance", "Warnings",
+                    "Employee", "Target hours", "Credited working hours", "Hour difference",
+                    "Opening hour balance", "Closing hour balance", "Vacation balance", "Warnings",
                 ],
                 "rows": overview_rows,
             },
