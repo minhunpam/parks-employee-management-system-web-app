@@ -197,17 +197,27 @@ function renderEmployeeReports(reports = []) {
     employeeReportList.hidden = reports.length === 0;
 
     employeeReportBody.innerHTML = reports.map((report) => {
-        const pdfLink = report.pdf_url
-            ? `<a href="${htmlInjectionProtection(report.pdf_url)}" target="_blank" rel="noopener" class="font-bold text-[#0046a4] underline hover:text-black">Open PDF <span aria-hidden="true">↗</span></a>`
-            : "—";
-        const details = report.error || report.delivery_error || "—";
-        return `<tr class="border-b border-[#cccccc] last:border-0 hover:bg-[#f7f7f7]">
-            <th scope="row" class="px-4 py-4 font-bold">${htmlInjectionProtection(report.employee || report.name)}</th>
-            <td class="px-4 py-4">${pdfLink}</td>
-            <td class="px-4 py-4 ${statusClass(report.generation_status)}">${htmlInjectionProtection(statusLabel(report.generation_status))}</td>
-            <td class="px-4 py-4 ${statusClass(report.delivery_status)}">${htmlInjectionProtection(statusLabel(report.delivery_status, "Not sent"))}</td>
-            <td class="max-w-xs px-4 py-4 text-[#757575]">${htmlInjectionProtection(details)}</td>
-        </tr>`;
+      const pdfLink = report.pdf_url
+        ? `<a href="${htmlInjectionProtection(report.pdf_url)}" target="_blank" rel="noopener" class="font-bold text-[#0046a4] underline hover:text-black">Open PDF <span aria-hidden="true">↗</span></a>`
+        : "—";
+      const details = report.error || report.delivery_error || "—";
+      
+      return `
+      <tr class="border-b border-[#cccccc] last:border-0 hover:bg-[#f7f7f7]">
+        <th scope="row" class="px-4 py-4 font-bold">
+          ${htmlInjectionProtection(report.employee || report.name)}
+        </th>
+        <td class="px-4 py-4">${pdfLink}</td>
+        <td class="px-4 py-4 ${statusClass(report.generation_status)}">
+          ${htmlInjectionProtection(statusLabel(report.generation_status))}
+        </td>
+        <td class="px-4 py-4 ${statusClass(report.delivery_status)}">
+          ${htmlInjectionProtection(statusLabel(report.delivery_status, "Not sent"))}
+        </td>
+        <td class="max-w-xs px-4 py-4 text-[#757575]">
+          ${htmlInjectionProtection(details)}
+        </td>
+      </tr>`;
     }).join("");
 }
 
@@ -270,6 +280,8 @@ async function sendReports(url, button, statusElement, message) {
       renderBatch({ ...state.batch, ...data, confirmed: true });
       statusElement.textContent = data.message || "Delivery completed";
       setNotice();
+
+      renderEmployeeReports(data.employee_reports || [])
     } catch (error) {
       statusElement.textContent = error.message;
       setNotice("Delivery finished with an error", error.message, { error: true });

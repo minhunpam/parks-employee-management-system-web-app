@@ -302,6 +302,7 @@ class ManagerEmailTests(SimpleTestCase):
 
         employee = SimpleNamespace(first_name="Ademir", email="ademir@example.com")
         message = build_employee_email(
+            "Hung",
             employee,
             "Juni",
             2026,
@@ -311,7 +312,9 @@ class ManagerEmailTests(SimpleTestCase):
 
         self.assertEqual(message["To"], "ademir@example.com")
         self.assertEqual(message["Subject"], "Stundenliste Juni 2026")
-        self.assertIn("Hallo Ademir,", message.get_body().get_content())
+        body = message.get_body().get_content()
+        self.assertIn("Hallo Ademir,", body)
+        self.assertIn("LG Hung", body)
         attachments = list(message.iter_attachments())
         self.assertEqual(len(attachments), 1)
         self.assertEqual(attachments[0].get_filename(), "Schicht_Ademir_Juni_2026_EXPORT.pdf")

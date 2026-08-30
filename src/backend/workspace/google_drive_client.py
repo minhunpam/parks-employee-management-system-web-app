@@ -102,6 +102,11 @@ class GoogleDriveClient:
             None,
         )
 
+        delivery_state = configuration.delivery_state or {}
+        period_key = f"{year}-{configuration.period_month:02d}"
+        period_state = delivery_state.get(period_key, {})
+        sent_employees = period_state.get("employees", [])
+
         employee_export_files = []
         employee_filename_pattern = re.compile(
             rf"^Schicht_(?P<employee>.+)_{german_month}_{year}_EXPORT\.pdf$"
@@ -110,6 +115,15 @@ class GoogleDriveClient:
             match = employee_filename_pattern.fullmatch(file.get("name", ""))
             if not match:
                 continue
+
+            employee = Employee.objects.filter(
+                first_name__iexact=match.group("employee")
+            ).first()
+
+            delivery_state = (
+                "sent" if employee and employee.pk in sent_employees else "not_sent"
+            )
+            print(delivery_state)
                 
             employee_export_files.append(
                 {
@@ -117,7 +131,7 @@ class GoogleDriveClient:
                     "file_id": f"{file['id']}",
                     "pdf_url": f"https://drive.google.com/file/d/{file['id']}/view",
                     "generation_status": "generated",
-                    "delivery_status": "not_sent",
+                    "delivery_status": delivery_state,
                     "error": None,
                 }
             )

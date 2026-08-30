@@ -968,7 +968,7 @@ def _pdf_delivery_context(request):
     export_state = drive_client.prepare_pdf_export_folders(folder["id"], configuration)
     delivery_state = configuration.delivery_state or {}
     period_key = f"{configuration.period_year}-{configuration.period_month:02d}"
-    period_state = delivery_state.get(period_key)
+    period_state = delivery_state.setdefault(period_key, {"managers": [], "employees": []},)
     
     return {
         "configuration": configuration, 
@@ -1015,7 +1015,7 @@ def pdf_export_send_summary(request):
     if isinstance(context, JsonResponse):
         return context
 
-    configuration = context["configuration"] 
+    configuration: WorkspaceConfiguration = context["configuration"] 
     drive_client: GoogleDriveClient = context["drive_client"] 
     gmail_client: GoogleGmailClient = context["gmail_client"] 
     export_state = context["export_state"] 
@@ -1041,15 +1041,16 @@ def pdf_export_send_summary(request):
             continue
             
         try:
+            sender_first_name = configuration.owner.first_name
             email_message = build_manager_email(
+                sender_first_name,
                 recipient, 
                 export_state["german_month"], 
                 export_state["year"], 
                 summary_file["name"], 
-                content
+                content,
             )
-            response = gmail_client.send(email_message)
-            print(response)
+            gmail_client.send(email_message)
             period_state["managers"].append(recipient)
             results.append(
                 {
@@ -1094,7 +1095,7 @@ def pdf_export_send_employees(request):
     if isinstance(context, JsonResponse):
         return context
         
-    configuration = context["configuration"] 
+    configuration: WorkspaceConfiguration = context["configuration"] 
     drive_client: GoogleDriveClient = context["drive_client"] 
     gmail_client: GoogleGmailClient = context["gmail_client"] 
     export_state = context["export_state"] 
@@ -1109,20 +1110,24 @@ def pdf_export_send_employees(request):
             results.append({"employee": report["employee"], "status": "failed", "error": "Employee email is missing."})
             continue
             
-        employee_key = str(employee.pk)
+        employee_key = int(employee.pk)
         if employee_key in period_state["employees"]:
             results.append({"employee": report["employee"], "status": "sent"})
             continue
         try:
             content = drive_client.download_file_content(report["file_id"])
+            sender_first_name = configuration.owner.first_name
             email_message = build_employee_email(
+                sender_first_name,
                 employee, 
                 export_state["german_month"], 
                 export_state["year"], 
                 report.get("name", f"Schicht_{employee.first_name}_{export_state['german_month']}_{export_state['year']}_EXPORT.pdf"), 
                 content
             )
-            gmail_client.send(email_message)
+            response = gmail_client.send(email_message)
+            print(response)
+            
             period_state["employees"].append(employee_key)
             results.append(
                 {
