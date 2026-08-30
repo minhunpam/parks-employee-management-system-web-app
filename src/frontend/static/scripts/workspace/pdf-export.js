@@ -42,7 +42,6 @@ const reviewStatus = document.querySelector("#review-status");
 const employeeReportEmpty = document.querySelector("#employee-report-empty");
 const employeeReportList = document.querySelector("#employee-report-list");
 const employeeReportBody = document.querySelector("#employee-report-body");
-const deliverySummary = document.querySelector("#delivery-summary");
 const sendSummaryButton = document.querySelector("#send-summary-button");
 const sendEmployeesButton = document.querySelector("#send-employees-button");
 const summaryDeliveryStatus = document.querySelector("#summary-delivery-status");
@@ -96,6 +95,7 @@ async function loadStatus() {
   } catch (error) {
     readinessStatus.textContent = error.message;
     setNotice("Export status unavailable", error.message, { error: true });
+  } finally {
     setButtons();
   }
 }
@@ -146,26 +146,36 @@ function renderBatch(data) {
   renderRecipients(data.manager_recipients || []);
 
   if (data.summary_pdf_url) {
-      summaryEmpty.hidden = true;
-      summaryReviewContainer.hidden = false;
-      summaryDownloadLink.href = data.summary_pdf_url;
-      reviewStatus.textContent = state.confirmed ? "Review confirmed" : "Review required";
-      reviewStatus.className = `border px-3 py-2 text-xs font-bold uppercase tracking-wide ${state.confirmed ? "border-[#3f8500] text-[#3f8500]" : "border-[#cccccc] text-[#757575]"}`;
+    summaryEmpty.hidden = true;
+    summaryReviewContainer.hidden = false;
+    summaryDownloadLink.href = data.summary_pdf_url;
+    reviewStatus.textContent = state.confirmed ? "Review confirmed" : "Review required";
+    reviewStatus.className = `border px-3 py-2 text-xs font-bold uppercase tracking-wide ${state.confirmed ? "border-[#3f8500] text-[#3f8500]" : "border-[#cccccc] text-[#757575]"}`;
+
+    summaryReviewCheckbox.disabled = state.confirmed;
+    summaryReviewCheckbox.checked = state.confirmed;
+    
   } else {
-      summaryEmpty.hidden = false;
-      summaryReviewContainer.hidden = true;
-      summaryDownloadLink.href = "#";
-      reviewStatus.textContent = "Review required";
+    summaryEmpty.hidden = false;
+    summaryReviewContainer.hidden = true;
+    summaryDownloadLink.href = "#";
+    reviewStatus.textContent = "Review required";
   }
 
-  renderEmployeeReports(data.employee_reports || data.employees || []);
+  renderEmployeeReports(data.employee_reports || []);
 
   const summaryDelivery = data.summary_delivery || {};
+  summaryDeliveryStatus.textContent = state.confirmed ? "Ready to send to configured managers." : "Review and confirm the summary first.";
+  if (summaryDelivery.status === "sent") {
+    summaryDeliveryStatus.textContent = "Delivery finished"
+  }
+  
   const employeeDelivery = data.employee_delivery || {};
-  summaryDeliveryStatus.textContent = summaryDelivery.message || (state.confirmed ? "Ready to send to configured managers." : "Review and confirm the summary first.");
-  employeeDeliveryStatus.textContent = employeeDelivery.message || (state.confirmed ? "Ready to send employee PDFs." : "Review and confirm the summary first.");
-  deliverySummary.textContent = data.delivery_message || "";
-
+  employeeDeliveryStatus.textContent = state.confirmed ? "Ready to send employee PDFs." : "Review and confirm the summary first.";
+  if (employeeDelivery.status === "sent") {
+    employeeDeliveryStatus.textContent = "Delivery finished"
+  }
+  
   setButtons();
 }
 
@@ -207,8 +217,8 @@ function setButtons() {
 
     generateButton.disabled = !urls.generate || !exportReady;
     confirmButton.disabled = !hasSummary || !state.reviewed || state.confirmed || !urls.confirm;
-    sendSummaryButton.disabled = !state.confirmed || !urls.sendSummary;
-    sendEmployeesButton.disabled = !state.confirmed || !urls.sendEmployees;
+    sendSummaryButton.disabled = !state.confirmed || !urls.sendSummary || state.batch.summary_delivery.status !== "not_sent";
+    sendEmployeesButton.disabled = !state.confirmed || !urls.sendEmployees || state.batch.employee_delivery.status !== "not_sent";
 }
 
 async function generateReports() {
@@ -246,6 +256,7 @@ async function confirmReview() {
     } catch (error) {
         reviewStatus.textContent = error.message;
         setNotice("Confirmation failed", error.message, { error: true });
+    } finally {
         setButtons();
     }
 }
@@ -255,28 +266,44 @@ async function sendReports(url, button, statusElement, message) {
     statusElement.textContent = `${message}...`;
 
     try {
-        const data = await requestJson(url, { method: "POST", body: JSON.stringify({}) });
-        renderBatch({ ...state.batch, ...data, confirmed: true });
-        statusElement.textContent = data.message || "Delivery completed.";
-        setNotice();
+      const data = await requestJson(url, { method: "POST", body: JSON.stringify({}) });
+      renderBatch({ ...state.batch, ...data, confirmed: true });
+      statusElement.textContent = data.message || "Delivery completed";
+      setNotice();
     } catch (error) {
-        statusElement.textContent = error.message;
-        setNotice("Delivery finished with an error", error.message, { error: true });
+      statusElement.textContent = error.message;
+      setNotice("Delivery finished with an error", error.message, { error: true });
     } finally {
-        setButtons();
+      setButtons();
     }
 }
 
 summaryReviewCheckbox.addEventListener("change", () => {
   state.reviewed = summaryReviewCheckbox.checked;
-  console.log(state);
   setButtons();
 });
 
 
 generateButton.addEventListener("click", generateReports);
 confirmButton.addEventListener("click", confirmReview);
-sendSummaryButton.addEventListener("click", () => sendReports(urls.sendSummary, sendSummaryButton, summaryDeliveryStatus, "Sending summary to managers"));
-sendEmployeesButton.addEventListener("click", () => sendReports(urls.sendEmployees, sendEmployeesButton, employeeDeliveryStatus, "Sending employee PDFs"));
+sendSummaryButton.addEventListener("click", () =>
+{
+  sendReports(
+    urls.sendSummary,
+    sendSummaryButton,
+    summaryDeliveryStatus,
+    "Sending summary to managers"
+  )
+});
+
+sendEmployeesButton.addEventListener("click", () =>
+{
+  sendReports(
+    urls.sendEmployees,
+    sendEmployeesButton,
+    employeeDeliveryStatus,
+    "Sending employee PDFs"
+  )
+});
 
 loadStatus();

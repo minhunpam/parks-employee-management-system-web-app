@@ -110,9 +110,11 @@ class GoogleDriveClient:
             match = employee_filename_pattern.fullmatch(file.get("name", ""))
             if not match:
                 continue
+                
             employee_export_files.append(
                 {
                     "employee": match.group("employee"),
+                    "file_id": f"{file['id']}",
                     "pdf_url": f"https://drive.google.com/file/d/{file['id']}/view",
                     "generation_status": "generated",
                     "delivery_status": "not_sent",
