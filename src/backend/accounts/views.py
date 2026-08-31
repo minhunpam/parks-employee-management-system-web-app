@@ -3,9 +3,11 @@ import secrets
 
 # Django modules
 from django.conf import settings
-from django.contrib.auth import login
+from django.contrib.auth import login, logout
+from django.contrib.auth.views import login_required
 from django.http import HttpResponseBadRequest
 from django.shortcuts import redirect, render
+from django.views.decorators.http import require_POST
 
 # Google modules
 from google.auth.exceptions import GoogleAuthError
@@ -134,6 +136,7 @@ def google_callback(request):
 
     return redirect("workspace:entry")
 
+@login_required
 def approval_pending(request):
     pending_user_id = request.session.get(PENDING_APPROVAL_USER_SESSION_KEY)
     if pending_user_id:
@@ -150,4 +153,8 @@ def approval_pending(request):
         status=403
     )
 
+@require_POST
+def google_logout(request):
+    logout(request)
+    return redirect("home")
 

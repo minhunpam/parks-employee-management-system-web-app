@@ -20,6 +20,13 @@
                     Employee dashboard
                     <!--<span aria-hidden="true">→</span>-->
                 </a>
+
+                <form method="post" action="{% url 'accounts:google-logout' %}" class="border-l-2 border-[#76b900] pl-4">
+                    {% csrf_token %}
+                    <button type="submit" class="text-sm font-bold text-white transition hover:text-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black">
+                        Log out
+                    </button>
+                </form>
             </div>
         </nav>
     </header>

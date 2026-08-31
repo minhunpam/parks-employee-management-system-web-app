@@ -24,3 +24,10 @@
 Revoking Google access does not inherently invalidate the app session. Many applications keep the
 session alive and request reconnection only when the integration is used.
 
+## Logout
+- Use a CSRF-protected POST request
+- Call Django’s logout(request), clearing the entire session.
+- Clear pending approval and OAuth state.
+- Preserve the stored Google connection.
+- Redirect to the public home page.
+- Leave protected pages guarded by @login_required.
