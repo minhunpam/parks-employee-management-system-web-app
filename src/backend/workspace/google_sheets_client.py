@@ -296,6 +296,10 @@ class GoogleSheetsClient:
 
     @classmethod
     def _find_employee_for_sheet(cls, sheet_title):
+        '''
+        Fetch the employee from `sheet_title`
+        '''
+
         normalized_title = cls._normalize_employee_name(sheet_title)
         employees = [
             employee for employee in Employee.objects.all()

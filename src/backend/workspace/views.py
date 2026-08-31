@@ -12,6 +12,8 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.conf import settings
+from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
 
 # Google modules
 from google.auth.exceptions import GoogleAuthError, RefreshError
@@ -23,8 +25,9 @@ from googleapiclient.errors import HttpError
 # Local modules
 from accounts.google_oauth import build_google_client_config
 from accounts.models import GoogleConnection
-from .models import WorkspaceConfiguration
-from employees.models import EmployeeMonth
+from .google_gmail_client import GoogleGmailClient
+from .models import WorkspaceConfiguration, default_summary_pdf_state
+from employees.models import Employee, EmployeeMonth
 from .google_resources import parse_resource_id
 from .csv_parser import parse_csv_content
 from utils.validator import (
@@ -34,7 +37,9 @@ from utils.validator import (
 )
 from .google_drive_client import GoogleDriveClient
 from .google_sheets_client import GoogleSheetsClient
-from . import sheets_preview_helpers
+from .email_delivery import build_employee_email, build_manager_email
+from .pdf_exporter import build_snapshot, render_export_batch
+from . import sheets_helpers
 
 @login_required
 def entry(request):
@@ -70,14 +75,14 @@ def _validate_csv_import_context(request):
         return validation_response
 
     try:
-        google_drive_client, google_sheets_client, folder, spreadsheet = (
+        google_drive_client, google_sheets_client, _, folder, spreadsheet = (
             get_validated_workspace_resources(
                 connection,
                 configuration.root_folder_id,
                 configuration.spreadsheet_id,
             )
         )
-        import_state = google_drive_client.prepare_csv_import_folder(folder["id"], configuration)
+        import_state = google_drive_client.prepare_csv_import_folders(folder["id"], configuration)
     except RefreshError:
         return JsonResponse(
             {
@@ -105,21 +110,21 @@ def _csv_import_state_response(context):
     import_state = context["import_state"]
     spreadsheet = context["spreadsheet"]
 
-    if import_state["invalid_files"]:
+    if import_state["invalid_import_files"]:
         return JsonResponse(
             {
                 "status": "invalid_files",
                 "message": "Some CSV filenames do not follow the required convention.",
                 "folder": {
-                    "id": import_state["month_folder"]["id"],
+                    "id": import_state["month_import_folder"]["id"],
                     "name": import_state["folder_name"],
                 },
-                "invalid_files": import_state["invalid_files"],
+                "invalid_files": import_state["invalid_import_files"],
             },
             status=422,
         )
 
-    if not import_state["files"]:
+    if not import_state["valid_import_files"]:
         return JsonResponse(
             {
                 "status": "awaiting_upload",
@@ -128,7 +133,7 @@ def _csv_import_state_response(context):
                     "folder before importing."
                 ),
                 "folder": {
-                    "id": import_state["month_folder"]["id"],
+                    "id": import_state["month_import_folder"]["id"],
                     "name": import_state["folder_name"],
                 },
             },
@@ -139,12 +144,12 @@ def _csv_import_state_response(context):
         {
             "status": "ready",
             "folder": {
-                "id": import_state["month_folder"]["id"],
+                "id": import_state["month_import_folder"]["id"],
                 "name": import_state["folder_name"],
             },
             "files": [
                 {"id": file["id"], "name": file["name"]}
-                for file in import_state["files"]
+                for file in import_state["valid_import_files"]
             ],
             "spreadsheet": {
                 "id": spreadsheet["spreadsheetId"],
@@ -186,7 +191,7 @@ def csv_import(request):
     parsed_files = []
     errors = []
 
-    for file in import_state["files"]:
+    for file in import_state["valid_import_files"]:
         try:
             content = google_drive_client.download_file_content(file["id"])
             parsed_file = parse_csv_content(
@@ -451,7 +456,15 @@ def save_setup(request):
         )
         period_month = int(payload.get("period_month", ""))
         period_year = int(payload.get("period_year", ""))
-    except (ValueError, TypeError, json.JSONDecodeError) as error:
+        manager_recipients = payload.get("manager_recipients", [])
+        if not isinstance(manager_recipients, list):
+            raise ValueError("Manager recipients must be a list of email addresses.")
+        manager_recipients = list(dict.fromkeys(
+            email.strip() for email in manager_recipients if email.strip()
+        ))
+        for email in manager_recipients:
+            validate_email(email)
+    except (ValueError, TypeError, json.JSONDecodeError, ValidationError) as error:
         return JsonResponse(
             {"error": str(error)},
             status=400
@@ -468,6 +481,7 @@ def save_setup(request):
         or configuration.spreadsheet_id != spreadsheet_id
         or configuration.period_month != period_month
         or configuration.period_year != period_year
+        or configuration.manager_recipients != manager_recipients
     )
     if changed and payload.get("confirmation") != "CHANGE WORKSPACE CONFIG":
         return JsonResponse(
@@ -504,6 +518,7 @@ def save_setup(request):
     configuration.spreadsheet_id = spreadsheet_id
     configuration.period_month = period_month
     configuration.period_year = period_year
+    configuration.manager_recipients = manager_recipients
     configuration.save()
     
     return JsonResponse(
@@ -543,7 +558,7 @@ def sheets_preview_overview(request):
         return validation_response
 
     try:
-        _, google_sheets_client, _, spreadsheet = get_validated_workspace_resources(
+        _, google_sheets_client, _, _, spreadsheet = get_validated_workspace_resources(
             connection,
             configuration.root_folder_id,
             configuration.spreadsheet_id,
@@ -587,7 +602,7 @@ def sheets_preview_overview(request):
             )
 
             rows = [
-                sheets_preview_helpers._handle_row(row, row_index)
+                sheets_helpers._handle_row(row, row_index)
                 for row_index, row in enumerate(raw_rows)
                 if row and row[0]
             ]
@@ -610,7 +625,7 @@ def sheets_preview_overview(request):
     total_warning_count = 0
 
     for employee, sheet_title, raw_rows in sheet_records:
-        month_record = EmployeeMonth.objects.filter(
+        month_record: EmployeeMonth = EmployeeMonth.objects.filter(
             employee=employee,
             year=configuration.period_year,
             month=configuration.period_month,
@@ -619,7 +634,7 @@ def sheets_preview_overview(request):
         if month_record is None:
             continue
 
-        warnings_str, individual_warning_count = sheets_preview_helpers._sheet_warnings(raw_rows)
+        warnings_str, individual_warning_count = sheets_helpers._sheet_warnings(raw_rows)
         worked_hours += float(month_record.worked_hours)
         vacation_days += month_record.vacation_days_used
         total_warning_count += individual_warning_count
@@ -627,12 +642,12 @@ def sheets_preview_overview(request):
         overview_rows.append({
             "employeeId": sheet_title.casefold(),
             "employee": sheet_title,
-            "target": sheets_preview_helpers._hours(month_record.target_working_hours),
-            "worked": sheets_preview_helpers._hours(month_record.worked_hours),
-            "difference": sheets_preview_helpers._hours(month_record.hour_difference),
-            "opening": sheets_preview_helpers._hours(month_record.opening_hour_account_balance),
-            "closing": sheets_preview_helpers._hours(month_record.closing_hour_account_balance),
-            "vacation": sheets_preview_helpers._days(month_record.closing_vacation_balance),
+            "target": sheets_helpers._hours(month_record.target_working_hours),
+            "credited_working_hours": sheets_helpers._hours(month_record.credited_working_hours),
+            "difference": sheets_helpers._hours(month_record.hour_difference),
+            "opening": sheets_helpers._hours(month_record.opening_hour_account_balance),
+            "closing": sheets_helpers._hours(month_record.closing_hour_account_balance),
+            "vacation": sheets_helpers._days(month_record.closing_vacation_balance),
             "warnings": warnings_str,
         })
 
@@ -642,15 +657,14 @@ def sheets_preview_overview(request):
             "spreadsheetUrl": f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/edit",
             "overview": {
                 "headers": [
-                    "Employee", "Target hours", "Worked hours", "Difference",
-                    "Opening balance", "Closing balance", "Vacation balance", "Warnings",
+                    "Employee", "Target hours", "Credited working hours", "Hour difference",
+                    "Opening hour balance", "Closing hour balance", "Vacation balance", "Warnings",
                 ],
                 "rows": overview_rows,
             },
             "employees": employees,
         },
     }, status=200)
-
 
 @login_required
 @require_POST
@@ -662,7 +676,7 @@ def sheets_preview_write(request):
         return validation_response
 
     try:
-        _, google_sheets_client, _, spreadsheet = get_validated_workspace_resources(
+        _, google_sheets_client, _, _, spreadsheet = get_validated_workspace_resources(
             connection,
             configuration.root_folder_id,
             configuration.spreadsheet_id,
@@ -700,4 +714,454 @@ def sheets_preview_write(request):
             },
         },
         status=200,
+    )
+
+@login_required
+@require_GET
+def pdf_export(request):
+    connection: GoogleConnection = getattr(request.user, "google_connection", None)
+    configuration: WorkspaceConfiguration = getattr(request.user, "owned_workspace", None)
+    validation_response = validate_connection_and_configuration(connection, configuration)
+    if validation_response is not None:
+        return validation_response
+
+    gmail_scope = "https://www.googleapis.com/auth/gmail.send"
+    if gmail_scope not in (connection.granted_scopes or []):
+        return JsonResponse(
+            {
+                "data": {
+                    "period_label": configuration.config_period_str,
+                    "period_month": configuration.period_month,
+                    "period_year": configuration.period_year,
+                    "ready": False,
+                    "readiness_message": "Reconnect Google to grant Gmail permission before sending reports.",
+                    "batch_status": "not_generated",
+                    "summary_pdf_url": None,
+                    "reviewed": False,
+                    "confirmed": False,
+                    "manager_recipients": configuration.manager_recipients,
+                    "employee_reports": [],
+                },
+                "code": "gmail_scope_required",
+                "error": "The Gmail send permission is missing.",
+            },
+            status=200,
+        )
+    
+
+    return render(
+        request,
+        "workspace/pdf-export.html",
+        {
+            "pdf_export_status_url": reverse("workspace:pdf-export-status"),
+            "pdf_export_generate_url": reverse("workspace:pdf-export-generate"),
+            "pdf_export_confirm_url": reverse("workspace:pdf-export-confirm"),
+            "pdf_export_send_summary_url": reverse("workspace:pdf-export-send-summary"),
+            "pdf_export_send_employees_url": reverse("workspace:pdf-export-send-employees"),
+        },
+    )
+
+@login_required
+@require_GET
+def pdf_export_status(request):
+    connection: GoogleConnection = getattr(request.user, "google_connection", None)
+    configuration: WorkspaceConfiguration = getattr(request.user, "owned_workspace", None)
+    validation_response = validate_connection_and_configuration(connection, configuration)
+    if validation_response is not None:
+        return validation_response
+
+    try:
+        google_drive_client, _, _, folder, spreadsheet = get_validated_workspace_resources(
+            connection,
+            configuration.root_folder_id,
+            configuration.spreadsheet_id,
+        )
+        import_state = google_drive_client.prepare_csv_import_folders(folder["id"], configuration)
+        export_state = google_drive_client.prepare_pdf_export_folders(folder["id"], configuration)
+    except RefreshError:
+        return JsonResponse(
+            {
+                "error": "Your Google connection has expired or been revoked. Please reconnect Google.",
+                "code": "google_reconnect_required",
+            },
+            status=401,
+        )
+    except PermissionError as error:
+        return JsonResponse({"error": str(error)}, status=403)
+    except ValueError as error:
+        return JsonResponse({"error": str(error)}, status=400)
+    except HttpError as error:
+        return JsonResponse({"error": str(error)}, status=502)
+
+    summary_delivery = {
+        "status": "not_sent",
+        "sent_count": 0,
+    }
+    employee_delivery = {
+        "status": "not_sent",
+        "sent_count": 0,
+    }
+
+    period_key = f"{export_state['year']}-{configuration.period_month:02d}"
+    if configuration.delivery_state and configuration.delivery_state[period_key]:
+        managers = configuration.delivery_state[period_key]["managers"]
+        employees = configuration.delivery_state[period_key]["employees"]
+        if managers:
+            summary_delivery["status"] = "sent"
+            summary_delivery["sent_count"] = len(managers)
+
+        if employees:
+            employee_delivery["status"] = "sent"
+            employee_delivery["sent_count"] = len(managers)
+        
+
+    german_month = export_state["german_month"]
+    year = export_state["year"]
+    summary_export_file = export_state["summary_export_file"]
+    employee_export_files = export_state["employee_export_files"]
+
+    invalid_import_files = import_state["invalid_import_files"]
+    active_import_files = import_state["valid_import_files"]
+    ready = not invalid_import_files and not active_import_files
+    readiness_message = (
+        "The month is ready for export."
+        if ready
+        else "Export is blocked until the current month is imported successfully."
+    )
+
+    return JsonResponse(
+        {
+            "data": {
+                "period_label": f"{german_month} {year}",
+                "period_month": configuration.period_month,
+                "period_year": year,
+                "ready": ready,
+                "readiness_message": readiness_message,
+                "batch_status": "generated" if summary_export_file or employee_export_files else "not_generated",
+                "generation_message": "Existing export files found." if summary_export_file or employee_export_files else "No export generated.",
+                "summary_pdf_url": (
+                    f"https://drive.google.com/file/d/{summary_export_file['id']}/view"
+                    if summary_export_file else None
+                ),
+                "reviewed": configuration.summary_pdf_confirm_and_review_state["confirmed"],
+                "confirmed": configuration.summary_pdf_confirm_and_review_state["confirmed"],
+                "manager_recipients": configuration.manager_recipients,
+                "employee_reports": employee_export_files,
+                "summary_delivery": summary_delivery,
+                "employee_delivery": employee_delivery,
+                "spreadsheet": {
+                    "id": spreadsheet["spreadsheetId"],
+                    "name": spreadsheet.get("properties", {}).get("title"),
+                },
+            }
+        },
+        status=200,
+    )
+
+@login_required
+@require_POST
+def pdf_export_generate(request):
+    
+    connection: GoogleConnection = getattr(request.user, "google_connection", None)
+    configuration: WorkspaceConfiguration = getattr(request.user, "owned_workspace", None)
+    validation_response = validate_connection_and_configuration(connection, configuration)
+    if validation_response is not None:
+        return validation_response
+
+    delivery_state = configuration.delivery_state
+    if delivery_state:
+        delivery_state = {}
+        configuration._save_delivery_state(delivery_state)
+    else:
+        period_key = f"{configuration.period_year}-{configuration.period_month:02d}"
+        delivery_state.setdefault(period_key, {"managers": [], "employees": []})
+        configuration._save_delivery_state(delivery_state)
+
+    summary_pdf_confirm_and_review_state = configuration.summary_pdf_confirm_and_review_state
+    if summary_pdf_confirm_and_review_state:
+        configuration._save_summary_pdf_confirm_and_review_state(default_summary_pdf_state())
+        
+    try:
+        google_drive_client, google_sheets_client, _, folder, spreadsheet = get_validated_workspace_resources(
+            connection,
+            configuration.root_folder_id,
+            configuration.spreadsheet_id,
+        )
+
+        import_state = google_drive_client.prepare_csv_import_folders(folder["id"], configuration)
+        if import_state["invalid_import_files"] or import_state["valid_import_files"]:
+            return JsonResponse(
+                {"error": "PDF generation is blocked until the current month is imported successfully."},
+                status=409,
+            )
+
+        export_state = google_drive_client.prepare_pdf_export_folders(folder["id"], configuration)
+
+        snapshot = build_snapshot(spreadsheet, google_sheets_client, configuration.spreadsheet_id, configuration)
+        batch = render_export_batch(snapshot, export_state["german_month"])
+
+        summary_file = google_drive_client.upload_or_replace_pdf(
+            export_state["month_export_folder"]["id"], 
+            batch["summary"]["filename"], 
+            batch["summary"]["content"],
+        )
+        
+        employee_reports = []
+        for report in batch["employees"]:
+            uploaded = google_drive_client.upload_or_replace_pdf(
+                export_state["month_export_folder"]["id"], 
+                report["filename"], 
+                report["content"],
+            )
+            
+            employee_reports.append({
+                "employee": f"{report['employee'].first_name} {report['employee'].last_name}",
+                "pdf_url": f"https://drive.google.com/file/d/{uploaded['id']}/view",
+                "generation_status": "generated",
+                "delivery_status": "not_sent",
+                "error": None,
+            })
+    except RefreshError:
+        return JsonResponse(
+            {
+                "error": "Your Google connection has expired or been revoked.", 
+                "code": "google_reconnect_required"
+            },
+            status=401,
+        )
+    except PermissionError as error:
+        return JsonResponse({"error": str(error)}, status=403)
+    except ValueError as error:
+        return JsonResponse({"error": str(error)}, status=400)
+    except HttpError as error:
+        return JsonResponse({"error": str(error)}, status=502)
+
+    return JsonResponse({"data": {
+        "period_label": f"{export_state['german_month']} {export_state['year']}",
+        "period_month": configuration.period_month,
+        "period_year": configuration.period_year,
+        "ready": True,
+        "readiness_message": "The month is ready for export.",
+        "batch_status": "generated",
+        "generation_message": "PDFs generated successfully.",
+        "summary_pdf_url": f"https://drive.google.com/file/d/{summary_file['id']}/view",
+        "reviewed": False,
+        "confirmed": False,
+        "manager_recipients": configuration.manager_recipients,
+        "employee_reports": employee_reports,
+    }}, status=200)
+
+def _pdf_delivery_context(request):
+    connection: GoogleConnection = getattr(request.user, "google_connection", None)
+    configuration: WorkspaceConfiguration = getattr(request.user, "owned_workspace", None)
+    validation_response = validate_connection_and_configuration(connection, configuration)
+    if validation_response is not None:
+        return validation_response
+        
+    if not request.session.get(f"pdf_export_confirmed:{configuration.pk}"):
+        return JsonResponse(
+            {
+                "error": "Review and confirm the summary PDF first."
+            }, status=409
+        )
+        
+    drive_client, _, gmail_client, folder, _ = get_validated_workspace_resources(
+        connection, 
+        configuration.root_folder_id, 
+        configuration.spreadsheet_id
+    )
+    
+    export_state = drive_client.prepare_pdf_export_folders(folder["id"], configuration)
+    delivery_state = configuration.delivery_state or {}
+    period_key = f"{configuration.period_year}-{configuration.period_month:02d}"
+    period_state = delivery_state.setdefault(period_key, {"managers": [], "employees": []},)
+    
+    return {
+        "configuration": configuration, 
+        "drive_client": drive_client, 
+        "gmail_client": gmail_client, 
+        "export_state": export_state, 
+        "period_state": period_state, 
+        "delivery_state": delivery_state,
+    }
+
+@login_required
+@require_POST
+def pdf_export_confirm(request):
+    configuration: WorkspaceConfiguration | None = getattr(request.user, "owned_workspace", None)
+    if configuration is None:
+        return JsonResponse(
+            {
+                "error": "Workspace configuration is missing."
+            }, 
+            status=400
+        )
+        
+    request.session[f"pdf_export_confirmed:{configuration.pk}"] = True
+    state = configuration.summary_pdf_confirm_and_review_state
+    state["confirmed"] = True
+    state["reviewed"] = True
+    configuration._save_summary_pdf_confirm_and_review_state(state)
+    
+    return JsonResponse(
+        {
+            "data": 
+                {
+                    "reviewed": True, 
+                    "confirmed": True
+                }
+        }, 
+        status=200
+    )
+
+@login_required
+@require_POST
+def pdf_export_send_summary(request):    
+    context = _pdf_delivery_context(request)
+    if isinstance(context, JsonResponse):
+        return context
+
+    configuration: WorkspaceConfiguration = context["configuration"] 
+    drive_client: GoogleDriveClient = context["drive_client"] 
+    gmail_client: GoogleGmailClient = context["gmail_client"] 
+    export_state = context["export_state"] 
+    period_state = context["period_state"] 
+    delivery_state = context["delivery_state"]
+
+    summary_file = export_state["summary_export_file"]
+    recipients = configuration.manager_recipients or []
+    if not summary_file:
+        return JsonResponse({"error": "Generate the PDF reports before sending."}, status=409)
+    if not recipients:
+        return JsonResponse({"error": "No manager recipients are configured."}, status=400)
+        
+    content = drive_client.download_file_content(summary_file["id"])
+    results = []
+    for recipient in recipients:
+        if recipient in period_state["managers"]:
+            results.append(
+                {
+                    "recipient": recipient, 
+                    "status": "sent"
+                })
+            continue
+            
+        try:
+            sender_first_name = configuration.owner.first_name
+            email_message = build_manager_email(
+                sender_first_name,
+                recipient, 
+                export_state["german_month"], 
+                export_state["year"], 
+                summary_file["name"], 
+                content,
+            )
+            gmail_client.send(email_message)
+            period_state["managers"].append(recipient)
+            results.append(
+                {
+                    "recipient": recipient, 
+                    "status": "sent"
+                }
+            )
+            
+        except HttpError as error:
+            results.append(
+                {
+                    "recipient": recipient, 
+                    "status": "failed", 
+                    "error": error.content,
+                }
+            )
+            
+    configuration._save_delivery_state(delivery_state)
+    failed = [result for result in results if result["status"] == "failed"]
+    
+    return JsonResponse(
+        {
+            "data": 
+                {
+                    "summary_delivery": 
+                        {
+                            "status": "failed" if failed else "sent", 
+                            "message": f"Sent to {len(results) - len(failed)} manager(s).", 
+                            "sent_count": len(results) - len(failed), 
+                            "failed_count": len(failed),
+                        }
+                }
+        }, 
+        status=200
+    )
+
+
+@login_required
+@require_POST
+def pdf_export_send_employees(request):
+    context = _pdf_delivery_context(request)
+    if isinstance(context, JsonResponse):
+        return context
+        
+    configuration: WorkspaceConfiguration = context["configuration"] 
+    drive_client: GoogleDriveClient = context["drive_client"] 
+    gmail_client: GoogleGmailClient = context["gmail_client"] 
+    export_state = context["export_state"] 
+    period_state = context["period_state"] 
+    delivery_state = context["delivery_state"]
+    
+    results = []
+    for report in export_state["employee_export_files"]:
+        employee = Employee.objects.filter(first_name__iexact=report["employee"]).first()
+        
+        if employee is None or not employee.email:
+            results.append({"employee": report["employee"], "status": "failed", "error": "Employee email is missing."})
+            continue
+            
+        employee_key = int(employee.pk)
+        if employee_key in period_state["employees"]:
+            results.append({"employee": report["employee"], "status": "sent"})
+            continue
+        try:
+            content = drive_client.download_file_content(report["file_id"])
+            sender_first_name = configuration.owner.first_name
+            email_message = build_employee_email(
+                sender_first_name,
+                employee, 
+                export_state["german_month"], 
+                export_state["year"], 
+                report.get("name", f"Schicht_{employee.first_name}_{export_state['german_month']}_{export_state['year']}_EXPORT.pdf"), 
+                content
+            )
+            gmail_client.send(email_message)
+            
+            period_state["employees"].append(employee_key)
+            results.append(
+                {
+                    "employee": report["employee"], 
+                    "status": "sent"
+                }
+            )
+            
+        except HttpError as error:
+            results.append(
+                {
+                    "employee": report["employee"], 
+                    "status": "failed", 
+                    "error": error.content,
+                }
+            )
+            
+    configuration._save_delivery_state(delivery_state)
+    failed = [result for result in results if result["status"] == "failed"]
+    return JsonResponse(
+        {
+            "data": 
+                {
+                    "employee_delivery": 
+                        {
+                            "status": "failed" if failed else "sent", "message": f"Sent to {len(results) - len(failed)} employee(s).", 
+                            "sent_count": len(results) - len(failed), "failed_count": len(failed)
+                        }
+                }
+        }, 
+        status=200
     )

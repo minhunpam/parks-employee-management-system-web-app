@@ -15,7 +15,16 @@
             <a href="{% url 'home' %}" class="text-xl font-bold tracking-[0.18em] text-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black">PARKS</a>
             <div class="flex items-center gap-6">
                 <span class="hidden text-sm text-white/70 sm:inline">Spreadsheet preview</span>
-                <a href="{% url 'employees:employee-dashboard' %}" class="text-sm font-bold text-white transition hover:text-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black">Employee dashboard <span aria-hidden="true">→</span></a>
+                <a href="{% url 'employees:employee-dashboard' %}" class="text-sm font-bold text-white transition hover:text-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black">
+                    Employee dashboard
+                    <!--<span aria-hidden="true">→</span>-->
+                </a>
+                <form method="post" action="{% url 'accounts:google-logout' %}" class="border-l-2 border-[#76b900] pl-4">
+                    {% csrf_token %}
+                    <button type="submit" class="text-sm font-bold text-white transition hover:text-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black">
+                        Log out
+                    </button>
+                </form>
             </div>
         </nav>
     </header>
@@ -28,10 +37,9 @@
 
     <main id="sheets-preview-page" class="flex-1"
         data-overview-url="{{ sheets_preview_overview_url|default:'' }}"
-        data-employee-url="{{ sheets_preview_employee_url|default:'' }}"
         data-refresh-url="{{ sheets_preview_refresh_url|default:'' }}"
-        data-write-url="{{ sheets_preview_write_url|default:'' }}">
-            
+        data-write-url="{{ sheets_preview_write_url|default:'' }}"
+    >        
         <section class="bg-black text-white" aria-labelledby="preview-heading">
             <div class="mx-auto flex max-w-7xl flex-col gap-8 px-6 py-14 lg:flex-row lg:items-end lg:justify-between lg:px-8 lg:py-16">
                 <div>
@@ -41,9 +49,19 @@
                 </div>
                 
                 <div class="flex flex-col gap-3 sm:flex-row">
-                    <button id="refresh-preview-button" type="button" class="inline-flex min-h-11 items-center justify-center border-2 enabled:border-[#76b900] enabled:bg-[#76b900] px-5 py-3 text-sm font-bold text-black transition enabled:hover:border-[#5a8d00] enabled:hover:bg-[#5a8d00] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black disabled:bg-[#5a8d00] disabled:border-[#5a8d00] disabled:cursor-not-allowed">Refresh data <span class="ml-3" aria-hidden="true">↻</span></button>
+                    <button id="refresh-preview-button" type="button" class="inline-flex min-h-11 items-center justify-center border-2 enabled:border-[#76b900] enabled:bg-[#76b900] px-5 py-3 text-sm font-bold text-black transition enabled:hover:border-[#5a8d00] enabled:hover:bg-[#5a8d00] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black disabled:bg-[#5a8d00] disabled:border-[#5a8d00] disabled:cursor-not-allowed">
+                        Refresh data
+                        <!--<span class="ml-3" aria-hidden="true">↻</span>-->
+                    </button>
                     
-                    <a id="open-sheets-link" href="#" target="_blank" rel="noopener" class="inline-flex min-h-11 items-center justify-center border border-white px-5 py-3 text-sm font-bold text-white transition hover:border-[#76b900] hover:text-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black">Open in Google Sheets <span class="ml-3" aria-hidden="true">↗</span></a>
+                    <a id="open-sheets-link" href="#" target="_blank" rel="noopener" class="inline-flex min-h-11 items-center justify-center border border-white px-5 py-3 text-sm font-bold text-white transition hover:border-[#76b900] hover:text-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black">
+                        Open in Google Sheets
+                        <!--<span class="ml-3" aria-hidden="true">↗</span>-->
+                    </a>
+                    <a href="/workspace/pdf-export/" class="inline-flex min-h-11 items-center justify-center border border-white px-5 py-3 text-sm font-bold text-white transition hover:border-[#76b900] hover:text-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black">
+                        PDF export
+                        <!--<span class="ml-3" aria-hidden="true">→</span>-->
+                    </a>
                 </div>
             </div>
         </section>
@@ -57,7 +75,7 @@
             <div class="flex flex-col gap-5 border-b border-[#cccccc] pb-6 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                     <p class="text-sm font-bold uppercase tracking-wide text-[#76b900]">Monthly overview</p>
-                    <h2 id="period-title" class="mt-2 text-3xl font-bold">June 2026</h2>
+                    <h2 id="period-title" class="mt-2 text-3xl font-bold">Configured month</h2>
                     <p id="sync-status" class="mt-2 text-sm text-[#757575]" role="status" aria-live="polite">Ready to load spreadsheet data.</p>
                 </div>
                 <span id="protection-status" class="inline-flex items-center self-start border border-[#cccccc] px-3 py-2 text-xs font-bold uppercase tracking-wide text-[#757575]">Read-only preview</span>
@@ -94,9 +112,15 @@
                     </div>
                     
                     <div class="flex flex-col gap-3 sm:flex-row">
-                        <button id="add-entry-button" type="button" class="inline-flex min-h-11 items-center justify-center bg-[#76b900] px-5 py-3 text-sm font-bold text-black transition hover:bg-[#5a8d00] focus:outline-none focus:ring-2 focus:ring-[#76b900]">Add entry<span class="ml-3" aria-hidden="true">＋</span></button>
+                        <button id="add-entry-button" type="button" class="inline-flex min-h-11 items-center justify-center bg-[#76b900] px-5 py-3 text-sm font-bold text-black transition hover:bg-[#5a8d00] focus:outline-none focus:ring-2 focus:ring-[#76b900]">
+                            Add entry
+                            <!--<span class="ml-3" aria-hidden="true">＋</span>-->
+                        </button>
                         
-                        <a id="open-employee-sheet-link" href="#" target="_blank" rel="noopener" class="inline-flex min-h-11 items-center justify-center border border-[#1a1a1a] px-5 py-3 text-sm font-bold hover:bg-[#f7f7f7] focus:outline-none focus:ring-2 focus:ring-[#76b900]">Open sheet<span class="ml-3" aria-hidden="true">↗</span></a>
+                        <a id="open-employee-sheet-link" href="#" target="_blank" rel="noopener" class="inline-flex min-h-11 items-center justify-center border border-[#1a1a1a] px-5 py-3 text-sm font-bold hover:bg-[#f7f7f7] focus:outline-none focus:ring-2 focus:ring-[#76b900]">
+                            Open sheet
+                            <!--<span class="ml-3" aria-hidden="true">↗</span>-->
+                        </a>
                     </div>
                     
                 </div>

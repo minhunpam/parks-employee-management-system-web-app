@@ -130,7 +130,6 @@ class CsvParserTests(SimpleTestCase):
         self.assertEqual(result["shift_start"], "08:00")
         self.assertEqual(result["shift_end"], "12:00")
 
-
 class GoogleSheetsSummaryPropagationTests(TestCase):
     def setUp(self):
         self.employee = Employee.objects.create(
@@ -234,6 +233,92 @@ class GoogleSheetsSummaryPropagationTests(TestCase):
         self.assertEqual(self.year_2027.carried_over_vacation_days, 19)
         self.assertEqual(self.year_2027.vacation_balance, 42)
 
+class ManagerEmailTests(SimpleTestCase):
+    def test_gmail_client_sends_message_as_base64url_raw_payload(self):
+        from email.message import EmailMessage
+        from .google_gmail_client import GoogleGmailClient
+
+        gmail_service = Mock()
+        gmail_service.users.return_value.messages.return_value.send.return_value.execute.return_value = {
+            "id": "message-id"
+        }
+        message = EmailMessage()
+        message["To"] = "manager@example.com"
+        message.set_content("Hello")
+
+        result = GoogleGmailClient(gmail_service).send(message)
+
+        self.assertEqual(result, {"id": "message-id"})
+        request = gmail_service.users.return_value.messages.return_value.send
+        request.assert_called_once()
+        self.assertEqual(request.call_args.kwargs["userId"], "me")
+        self.assertIn("raw", request.call_args.kwargs["body"])
+
+    def test_delivers_summary_separately_to_each_manager(self):
+        from .email_delivery import deliver_manager_summary
+
+        gmail_client = Mock()
+        sent = []
+        results = deliver_manager_summary(
+            gmail_client,
+            ["first@example.com", "second@example.com"],
+            "Juni",
+            2026,
+            "Monatsübersicht_Juni_2026_EXPORT.pdf",
+            b"summary-pdf-content",
+            sent,
+        )
+
+        self.assertEqual([result["status"] for result in results], ["sent", "sent"])
+        self.assertEqual(gmail_client.send.call_count, 2)
+        self.assertEqual(sent, ["first@example.com", "second@example.com"])
+        for call in gmail_client.send.call_args_list:
+            message = call.args[0]
+            self.assertEqual(len(list(message.iter_attachments())), 1)
+            self.assertEqual(
+                list(message.iter_attachments())[0].get_filename(),
+                "Monatsübersicht_Juni_2026_EXPORT.pdf",
+            )
+
+    def test_does_not_resend_summary_to_manager_already_sent(self):
+        from .email_delivery import deliver_manager_summary
+
+        gmail_client = Mock()
+        results = deliver_manager_summary(
+            gmail_client,
+            ["manager@example.com"],
+            "Juni",
+            2026,
+            "summary.pdf",
+            b"pdf",
+            ["manager@example.com"],
+        )
+
+        self.assertEqual(results, [{"recipient": "manager@example.com", "status": "sent"}])
+        gmail_client.send.assert_not_called()
+
+    def test_builds_employee_email_with_personal_pdf_and_message(self):
+        from .email_delivery import build_employee_email
+
+        employee = SimpleNamespace(first_name="Ademir", email="ademir@example.com")
+        message = build_employee_email(
+            "Hung",
+            employee,
+            "Juni",
+            2026,
+            "Schicht_Ademir_Juni_2026_EXPORT.pdf",
+            b"employee-pdf-content",
+        )
+
+        self.assertEqual(message["To"], "ademir@example.com")
+        self.assertEqual(message["Subject"], "Stundenliste Juni 2026")
+        body = message.get_body().get_content()
+        self.assertIn("Hallo Ademir,", body)
+        self.assertIn("LG Hung", body)
+        attachments = list(message.iter_attachments())
+        self.assertEqual(len(attachments), 1)
+        self.assertEqual(attachments[0].get_filename(), "Schicht_Ademir_Juni_2026_EXPORT.pdf")
+        self.assertEqual(attachments[0].get_payload(decode=True), b"employee-pdf-content")
 
 class BuildGoogleResourcesTests(SimpleTestCase):
     def test_builds_drive_and_sheets_services(self):
@@ -245,6 +330,7 @@ class BuildGoogleResourcesTests(SimpleTestCase):
         credentials = Mock()
         drive_service = Mock()
         sheets_service = Mock()
+        gmail_service = Mock()
 
         fernet = Mock()
         fernet.decrypt.return_value = decrypted_token
@@ -258,15 +344,13 @@ class BuildGoogleResourcesTests(SimpleTestCase):
             patch("workspace.google_oauth.Request") as request_class,
             patch(
                 "workspace.google_oauth.build",
-                side_effect=[drive_service, sheets_service],
+                side_effect=[drive_service, sheets_service, gmail_service],
             ) as build_class,
         ):
             result = build_services(connection)
 
-        self.assertEqual(result, (drive_service, sheets_service))
+        self.assertEqual(result, (drive_service, sheets_service, gmail_service))
 
-        print(f"Type of drive service: {type(drive_service)}")
-        print(f"Type of sheets service: {type(sheets_service)}")
         
         fernet_class.assert_called_once_with(settings.FERNET_KEY)
         fernet.decrypt.assert_called_once_with(b"encrypted-token")
@@ -290,4 +374,46 @@ class BuildGoogleResourcesTests(SimpleTestCase):
             build_class.call_args_list[1].args,
             ("sheets", "v4"),
         )
+        self.assertEqual(
+            build_class.call_args_list[2].args,
+            ("gmail", "v1"),
+        )
+
+    def test_can_make_gmail_profile_request(self):
+        connection = SimpleNamespace(
+            encrypted_refresh_token="encrypted-token"
+        )
+        credentials = Mock()
+        gmail_service = Mock()
+        gmail_service.users.return_value.getProfile.return_value.execute.return_value = {
+            "emailAddress": "connected@example.com",
+        }
+
+        fernet = Mock()
+        fernet.decrypt.return_value = b"refresh-token"
+
+        with (
+            patch("workspace.google_oauth.Fernet", return_value=fernet),
+            patch("workspace.google_oauth.Credentials", return_value=credentials),
+            patch("workspace.google_oauth.Request"),
+            patch(
+                "workspace.google_oauth.build",
+                side_effect=[Mock(), Mock(), gmail_service],
+            ) as build_class,
+        ):
+            _, _, service = build_services(connection)
+            profile = service.users().getProfile(userId="me").execute()
+
+        self.assertEqual(profile["emailAddress"], "connected@example.com")
+        self.assertEqual(build_class.call_count, 3)
+        self.assertEqual(
+            build_class.call_args_list[2].args,
+            ("gmail", "v1"),
+        )
+        self.assertEqual(
+            build_class.call_args_list[2].kwargs,
+            {"credentials": credentials, "cache_discovery": False},
+        )
+        gmail_service.users.return_value.getProfile.assert_called_once_with(userId="me")
+        gmail_service.users.return_value.getProfile.return_value.execute.assert_called_once_with()
         

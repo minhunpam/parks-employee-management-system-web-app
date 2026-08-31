@@ -12,6 +12,8 @@ venv/
 /src/frontend/apps_scripts/
 /csv_raw_data/
 /src/frontend/node_modules/
+/sample_pdfs/
+/src/frontend/coverage
 
 #  WARNING: Do not commit these files, since they contain sensitive credentials!!!
 credentials.json

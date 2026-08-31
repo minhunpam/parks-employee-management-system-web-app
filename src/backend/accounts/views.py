@@ -3,9 +3,11 @@ import secrets
 
 # Django modules
 from django.conf import settings
-from django.contrib.auth import login
+from django.contrib.auth import login, logout
+from django.contrib.auth.views import login_required
 from django.http import HttpResponseBadRequest
 from django.shortcuts import redirect, render
+from django.views.decorators.http import require_POST
 
 # Google modules
 from google.auth.exceptions import GoogleAuthError
@@ -25,10 +27,14 @@ def home(request):
     if request.user.is_authenticated:
         return redirect("workspace:entry")
 
+    
     return render(request, "accounts/home.html")
 
 
 def google_login(request):
+    if request.user.is_authenticated:
+        return redirect("workspace:entry")
+    
     client_config = build_google_client_config(
         redirect_uri=settings.GOOGLE_OAUTH_REDIRECT_URI
     )
@@ -134,15 +140,26 @@ def google_callback(request):
 
     return redirect("workspace:entry")
 
-def approval_pending(request):
-    pending_user_id = request.session.get(PENDING_APPROVAL_USER_SESSION_KEY)
-    if pending_user_id:
-        user = User.objects.filter(pk=pending_user_id).first()
 
-        if user and user.is_active:
-            request.session.pop(PENDING_APPROVAL_USER_SESSION_KEY, None)
-            login(request, user)
-            return redirect("workspace:entry")
+def approval_pending(request):
+    if request.user.is_authenticated:
+        return redirect("workspace:entry")
+
+    pending_user_id = request.session.get(PENDING_APPROVAL_USER_SESSION_KEY)
+    
+    if not pending_user_id:
+        return redirect("home")
+
+    user = User.objects.filter(pk=pending_user_id).first()
+
+    if not user:
+        request.session.pop(PENDING_APPROVAL_USER_SESSION_KEY, None)
+        return redirect("home")
+
+    if user.is_active:
+        request.session.pop(PENDING_APPROVAL_USER_SESSION_KEY, None)
+        login(request, user)
+        return redirect("workspace:entry")
 
     return render(
         request,
@@ -150,4 +167,8 @@ def approval_pending(request):
         status=403
     )
 
+@require_POST
+def google_logout(request):
+    logout(request)
+    return redirect("home")
 

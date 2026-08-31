@@ -11,6 +11,9 @@ const spreadsheetInput = document.querySelector("#spreadsheet-id");
 const periodMonthInput = document.querySelector("#period-month");
 const periodYearInput = document.querySelector("#period-year");
 
+const managerRecipientsInput = document.querySelector("#manager-recipients");
+const managerRecipientsError = document.querySelector("#manager-recipients-error");
+
 const setupStatus = document.querySelector("#setup-status");
 const reconnectGoogle = document.querySelector("#reconnect-google");
 const confirmationDialog = document.querySelector("#workspace-confirmation-dialog");
@@ -25,6 +28,7 @@ function saveDraft() {
         spreadsheet_id: spreadsheetInput.value,
         period_month: periodMonthInput.value,
         period_year: periodYearInput.value,
+        manager_recipients: managerRecipientsInput.value,
     }));
 }
 
@@ -36,6 +40,7 @@ function restoreDraft() {
         spreadsheetInput.value = draft.spreadsheet_id || "";
         periodMonthInput.value = draft.period_month || "";
         periodYearInput.value = draft.period_year || "";
+        managerRecipientsInput.value = draft.manager_recipients || "";
     }
 }
 
@@ -98,11 +103,26 @@ async function saveSetup(payload) {
 }
 
 form.addEventListener("submit", async (event) => {
-  
     event.preventDefault();
-    setupStatus.textContent = "Checking Google resources…";
 
-    const payload = Object.fromEntries(new FormData(form));  
+    const managerRecipients = managerRecipientsInput.value
+      .split(/[\n,]+/)
+      .map((email) => email.trim())
+      .filter(Boolean);
+    const invalidRecipient = managerRecipients.find(
+      (email) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),
+    );
+    managerRecipientsError.textContent = invalidRecipient
+        ? `Enter a valid email address: ${invalidRecipient}`
+        : "";
+    if (invalidRecipient) {
+        managerRecipientsInput.focus();
+        return;
+    }
+
+    setupStatus.textContent = "Checking Google resources…";
+    const payload = Object.fromEntries(new FormData(form));
+    payload.manager_recipients = managerRecipients;
     let result;
 
     try {

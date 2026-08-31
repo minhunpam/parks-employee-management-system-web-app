@@ -6,7 +6,7 @@ const refreshUrl = page.dataset.refreshUrl;
 const writeUrl = page.dataset.writeUrl;
 
 const state = {
-    overview: null,
+    data: null,
     selectedEmployee: null,
     filter: "",
     editingEntry: null,
@@ -42,12 +42,12 @@ function sheetUrl(sheetId) {
     return "#";
   }
 
-  return `https://docs.google.com/spreadsheets/d/${encodeURIComponent(state.overview.spreadsheetId)}/edit#gid=${encodeURIComponent(sheetId)}`;
+  return `${state.data.spreadsheetUrl}#gid=${encodeURIComponent(sheetId)}`;
 }
 
 function renderOverview() {
-  const headers = state.overview.overview.headers || [];
-  const rows = (state.overview.overview.rows || []).filter((row) =>
+  const headers = state.data.overview.headers || [];
+  const rows = (state.data.overview.rows || []).filter((row) =>
       !state.filter || String(row.employee).toLowerCase().includes(state.filter.toLowerCase())
   );
 
@@ -61,7 +61,7 @@ function renderOverview() {
     `<tr class="border-b border-[#cccccc] last:border-0 hover:bg-[#f7f7f7]">
         <th scope="row" class="px-4 py-4 font-bold">${htmlInjectionProtection(row.employee)}</th>
         <td class="px-4 py-4">${htmlInjectionProtection(row.target)}</td>
-        <td class="px-4 py-4">${htmlInjectionProtection(row.worked)}</td>
+        <td class="px-4 py-4">${htmlInjectionProtection(row.credited_working_hours)}</td>
         <td class="px-4 py-4">${htmlInjectionProtection(row.difference)}</td>
         <td class="px-4 py-4">${htmlInjectionProtection(row.opening)}</td>
         <td class="px-4 py-4">${htmlInjectionProtection(row.closing)}</td>
@@ -77,11 +77,16 @@ function renderOverview() {
     </tr>`).join("");
 
   document.querySelector("#overview-empty").hidden = rows.length !== 0;
-  tableStatus.textContent = `${rows.length} of ${(state.overview.overview.rows || []).length} employees shown`;
+  tableStatus.textContent = `${rows.length} of ${(state.data.overview.rows || []).length} employees shown`;
+  overviewTableHead.scrollIntoView(
+    {
+      behavior: "smooth",
+      block: "start"
+    });
 }
 
 function renderEmployee(employeeId) {
-  const employee = state.overview.employees?.[employeeId];
+  const employee = state.data.employees?.[employeeId];
   if (!employee) return;
 
   state.selectedEmployee = employeeId;
@@ -117,16 +122,21 @@ function renderEmployee(employeeId) {
     </tr>`).join("");
     
   employeeEmpty.hidden = employee.rows.length !== 0;
-  detailSection.scrollIntoView({ behavior: "smooth", block: "start" });
+  detailSection.scrollIntoView(
+    {
+      behavior: "smooth",
+      block: "start"
+    });
 }
 
 function setLoadedData(data, externalChange = false) {  
-  state.overview = data;
+  state.data = data;
   document.querySelector("#period-title").textContent = data.configuration_period || "Configured month";
   openSheetsLink.href = data.spreadsheetUrl || "#";
   openSheetsLink.classList.toggle("pointer-events-none", openSheetsLink.href === "#");
   
   renderOverview();
+  
   
   if (state.selectedEmployee) {
     renderEmployee(state.selectedEmployee);
@@ -154,9 +164,12 @@ async function loadData({ refresh = false } = {}) {
     if (response.ok) {
       setLoadedData(payload.data || payload, Boolean(payload.external_change));
     }
-  
-    syncStatus.textContent.append(`\n${payload.error}`);
+    else {
+      syncStatus.textContent += `\n${payload.error}`;
+    }
   } catch (error) {
+    console.log("Something wrong happened!");
+    console.log(error);
     tableStatus.textContent = "Unable to load spreadsheet data.";
   } finally {
     document.querySelector("#refresh-preview-button").disabled = false;
@@ -164,7 +177,7 @@ async function loadData({ refresh = false } = {}) {
 }
 
 function openEntryDialog(row = null) {
-  const configuration_period = state.overview.configuration_period.split("/");
+  const configuration_period = state.data.configuration_period.split("/");
   const month = configuration_period[0].length === 2 ? `${configuration_period[0]}` : `0${configuration_period[0]}`;
   const year = `${configuration_period[1]}`;
   const days_in_month = getDaysInMonth(Number(month), Number(year));
@@ -280,17 +293,17 @@ employeeTableBody.addEventListener("click", (event) => {
   const button = event.target.closest(".correct-entry");
   if (!button || !state.selectedEmployee) return;
   
-  openEntryDialog(state.overview.employees[state.selectedEmployee].rows[Number(button.dataset.rowIndex)]);
+  openEntryDialog(state.data.employees[state.selectedEmployee].rows[Number(button.dataset.rowIndex)]);
 });
 
 document.querySelector("#add-entry-button").addEventListener("click", () => openEntryDialog());
 
 document.querySelector("#back-to-overview").addEventListener("click", () => {
   detailSection.hidden = true;
-  window.scrollTo(
+  overviewTableHead.scrollIntoView(
     {
-      top: 0,
-      behavior: "smooth"
+      behavior: "smooth",
+      block: "start"
     });
 });
 

@@ -1,4 +1,4 @@
-        
+         
 def _sheet_warnings(rows):
     warnings = {}
     total_warning_count = 0
@@ -34,7 +34,7 @@ def _handle_row(row: list[str], row_index=None):
     }
     
 def _cell(row, index, default=""):
-    return row[index] if index < len(row) else default
+    return row[index] if index < len(row) and row[index] is not None else default
 
 def _hours(value):
     return f"{_number(value):.2f} h"

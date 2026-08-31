@@ -15,14 +15,26 @@
             <a href="{% url 'home' %}" class="text-xl font-bold tracking-[0.18em] text-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black">PARKS</a>
             <div class="flex items-center gap-6">
                 <span class="hidden text-sm text-white/70 sm:inline">Employee management</span>
-                <a href="{% url 'workspace:entry' %}" class="text-sm font-bold text-white hover:text-[#76b900]">Workspace <span aria-hidden="true">→</span></a>
+                <a href="{% url 'workspace:entry' %}" class="text-sm font-bold text-white hover:text-[#76b900]">
+                    Workspace
+                    <!--<span aria-hidden="true">→</span>-->
+                </a>
+
+                <form method="post" action="{% url 'accounts:google-logout' %}" class="border-l-2 border-[#76b900] pl-4">
+                    {% csrf_token %}
+                    <button type="submit" class="text-sm font-bold text-white transition hover:text-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black">
+                        Log out
+                    </button>
+                </form>
             </div>
         </nav>
     </header>
     
     <div class="border-b border-[#cccccc] bg-[#f7f7f7]">
         <div class="mx-auto flex max-w-7xl items-center gap-3 px-6 py-3 text-xs font-bold uppercase tracking-wide text-[#757575] lg:px-8">
-            <span class="text-[#76b900]">Employee management</span><span aria-hidden="true">/</span><span>Dashboard</span>
+            <span class="text-[#76b900]">Employee management</span>
+            <span aria-hidden="true">/</span>
+            <span>Dashboard</span>
         </div>
     </div>
 
@@ -33,11 +45,15 @@
         <section class="bg-black text-white" aria-labelledby="dashboard-heading">
             <div class="mx-auto flex max-w-7xl flex-col gap-8 px-6 py-14 lg:flex-row lg:items-end lg:justify-between lg:px-8 lg:py-16">
                 <div>
-                    <p class="text-sm font-bold uppercase tracking-wide text-[#76b900]">Employee records</p><h1 id="dashboard-heading" class="mt-3 text-4xl font-bold leading-tight sm:text-5xl">Employee management.</h1>
+                    <p class="text-sm font-bold uppercase tracking-wide text-[#76b900]">Employee records</p>
+                    <h1 id="dashboard-heading" class="mt-3 text-4xl font-bold leading-tight sm:text-5xl">Employee management.</h1>
                     <p class="mt-5 max-w-2xl text-lg leading-7 text-white/70">Review employee records, monthly working balances, and yearly vacation summaries.</p>
                 </div>
                 
-                <a id="register-link" href="{% url 'employees:employee-register' %}" class="inline-flex min-h-11 items-center justify-center bg-[#76b900] px-6 py-3 text-base font-bold text-black hover:bg-[#5a8d00] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black">Register employee <span class="ml-3" aria-hidden="true">→</span></a>
+                <a id="register-link" href="{% url 'employees:employee-register' %}" class="inline-flex min-h-11 items-center justify-center bg-[#76b900] px-6 py-3 text-base font-bold text-black hover:bg-[#5a8d00] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black">
+                    Register employee
+                    <!--<span class="ml-3" aria-hidden="true">→</span>-->
+                </a>
             </div>
         </section>
 
