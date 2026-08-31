@@ -35,8 +35,14 @@
                 <h2 class="mt-8 text-2xl font-bold">Verification complete</h2>
                 <p class="mt-4 max-w-xl leading-7 text-[#1a1a1a]">Please ask a PARKS administrator to activate your account. Once your access has been approved, sign in again with your Google account.</p>
                 <div class="mt-8 flex flex-col gap-4 sm:flex-row">
-                    <a href="{% url 'home' %}" class="inline-flex min-h-11 items-center justify-center bg-[#76b900] px-6 py-3 text-base font-bold text-black transition hover:bg-[#5a8d00] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2">Return to home <span class="ml-3" aria-hidden="true">→</span></a>
-                    <a href="{% url 'accounts:google-login' %}" class="inline-flex min-h-11 items-center justify-center border-2 border-[#76b900] px-5 py-3 text-base font-bold text-black transition hover:bg-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2">Use another account <span class="ml-3" aria-hidden="true">→</span></a>
+                    <a href="{% url 'home' %}" class="inline-flex min-h-11 items-center justify-center bg-[#76b900] px-6 py-3 text-base font-bold text-black transition hover:bg-[#5a8d00] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2">
+                        Return to home
+                        <!--<span class="ml-3" aria-hidden="true">→</span>-->
+                    </a>
+                    <a href="{% url 'accounts:google-login' %}" class="inline-flex min-h-11 items-center justify-center border-2 border-[#76b900] px-5 py-3 text-base font-bold text-black transition hover:bg-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2">
+                        Use another account
+                        <!--<span class="ml-3" aria-hidden="true">→</span>-->
+                    </a>
                 </div>
             </article>
 
