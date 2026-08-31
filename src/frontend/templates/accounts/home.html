@@ -8,6 +8,7 @@
 
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/output.css' %}">
+    <script type="module" src="{% static 'scripts/accounts/home.js' %}"></script>
 </head>
 <body class="flex flex-col bg-white font-sans text-[#1a1a1a] antialiased">
     <header class="bg-black text-white">
@@ -41,7 +42,7 @@
                     <div class="flex items-start justify-between border-b border-[#5e5e5e] pb-5">
                         <div>
                             <p class="text-xs font-bold uppercase tracking-wide text-white/50">Workspace overview</p>
-                            <p class="mt-2 text-xl font-bold">June 2026</p>
+                            <p id="month-year-displayer" class="mt-2 text-xl font-bold"></p>
                         </div>
                         <span class="border border-[#76b900] px-3 py-1 text-xs font-bold uppercase text-[#76b900]">Ready</span>
                     </div>
