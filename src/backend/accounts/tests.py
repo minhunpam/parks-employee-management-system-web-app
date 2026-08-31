@@ -64,3 +64,17 @@ class ApprovalPendingViewTests(TestCase):
         response = self.client.get(reverse("accounts:approval-pending"))
 
         self.assertEqual(response.status_code, 403)
+
+    def test_authenticated_active_user_is_redirected_to_workspace(self):
+        self.user.is_active = True
+        self.user.save(update_fields=["is_active"])
+        self.client.force_login(self.user)
+
+        session = self.client.session
+        session.pop(PENDING_APPROVAL_USER_SESSION_KEY, None)
+        session.save()
+
+        response = self.client.get(reverse("accounts:approval-pending"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], reverse("workspace:entry"))

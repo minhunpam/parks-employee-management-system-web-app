@@ -136,16 +136,26 @@ def google_callback(request):
 
     return redirect("workspace:entry")
 
-@login_required
-def approval_pending(request):
-    pending_user_id = request.session.get(PENDING_APPROVAL_USER_SESSION_KEY)
-    if pending_user_id:
-        user = User.objects.filter(pk=pending_user_id).first()
 
-        if user and user.is_active:
-            request.session.pop(PENDING_APPROVAL_USER_SESSION_KEY, None)
-            login(request, user)
-            return redirect("workspace:entry")
+def approval_pending(request):
+    if request.user.is_authenticated:
+        return redirect("workspace:entry")
+
+    pending_user_id = request.session.get(PENDING_APPROVAL_USER_SESSION_KEY)
+    
+    if not pending_user_id:
+        return redirect("home")
+
+    user = User.objects.filter(pk=pending_user_id).first()
+
+    if not user:
+        request.session.pop(PENDING_APPROVAL_USER_SESSION_KEY, None)
+        return redirect("home")
+
+    if user.is_active:
+        request.session.pop(PENDING_APPROVAL_USER_SESSION_KEY, None)
+        login(request, user)
+        return redirect("workspace:entry")
 
     return render(
         request,

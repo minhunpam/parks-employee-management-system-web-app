@@ -24,6 +24,21 @@
 Revoking Google access does not inherently invalidate the app session. Many applications keep the
 session alive and request reconnection only when the integration is used.
 
+## Approval pending
+- The associated endpoint is not coupled with the demand of loggin the user in
+- since if an unauthenticated and inactive user deliberately enters this page, it would require them to log themselves in
+  - This would more complexity, since "why do we need to add a new authenticated user to the database, just because they want to see the `approval-pending` page?"
+  - And we can just instead redirect them back to home
+- Also the reason for `@login_required` here is:
+  - An inactive user cannot reach the `login()` call ---> he is also an unauthenticated user === anonymous user
+  - He is redirected to approval pending page, but since the page is guarded by `@login_required` which rejects anonymous user ---> asks him to login
+  - Eventually we are stuck in a login-loop
+
+### Rules
+- **Authenticated User** ---> workspace entry page
+- **Authenticated Inactive User** ---> approval pending page waiting until the admin approves
+- **Unauthenticated User/Anonymous User** ---> redirect to home
+
 ## Logout
 - Use a CSRF-protected POST request
 - Call Django’s logout(request), clearing the entire session.
