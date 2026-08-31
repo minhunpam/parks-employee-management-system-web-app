@@ -3,7 +3,9 @@
 - When user gets access `auth/google` endpoint, `google_login` is called
 
 ## What happens in `google_login`
-- 
+- One scenario that can happen is that the user might have become an authenticated user, but he deliberately enters url: `auth/google/login`. 
+  - In the previous implementation, this starts Google OAuth again with the consent/account-selection sceen. This could possibly/ most likely switch users
+  - What we can do instead is: redirect to the workspace entry. This keeps normal login preditable while still allowing account changes intentionally
 
 ## `RefreshError`
 - This exception is raised when the **stored Google OAuth refresh token is no longer valid**. Reaons for that could be:
