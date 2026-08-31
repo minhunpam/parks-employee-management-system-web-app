@@ -2,18 +2,19 @@ import { csrfToken, htmlInjectionProtection } from "../common.js";
 
 const page = document.querySelector("#pdf-export-page");
 const urls = {
-    status: page.dataset.statusUrl,
-    generate: page.dataset.generateUrl,
-    confirm: page.dataset.confirmUrl,
-    sendSummary: page.dataset.sendSummaryUrl,
-    sendEmployees: page.dataset.sendEmployeesUrl,
-    reconnect: page.dataset.reconnectUrl,
+  status: page.dataset.statusUrl,
+  generate: page.dataset.generateUrl,
+  confirm: page.dataset.confirmUrl,
+  sendSummary: page.dataset.sendSummaryUrl,
+  sendEmployees: page.dataset.sendEmployeesUrl,
+  reconnect: page.dataset.reconnectUrl,
 };
 
 const state = {
-    batch: null,
-    confirmed: false,
-    reviewed: false,
+  batch: null,
+  confirmed: false,
+  reviewed: false,
+  isSending: false,
 };
 
 const exportNotice = document.querySelector("#export-notice");
@@ -198,7 +199,9 @@ function renderEmployeeReports(reports = []) {
 
     employeeReportBody.innerHTML = reports.map((report) => {
       const pdfLink = report.pdf_url
-        ? `<a href="${htmlInjectionProtection(report.pdf_url)}" target="_blank" rel="noopener" class="font-bold text-[#0046a4] underline hover:text-black">Open PDF <span aria-hidden="true">↗</span></a>`
+        ? `<a href="${htmlInjectionProtection(report.pdf_url)}" target="_blank" rel="noopener" class="font-bold text-[#0046a4] underline hover:text-black">
+          Open PDF
+        `
         : "—";
       const details = report.error || report.delivery_error || "—";
       
@@ -222,18 +225,43 @@ function renderEmployeeReports(reports = []) {
 }
 
 function setButtons() {
-    const hasSummary = Boolean(state.batch?.summary_pdf_url);
-    const exportReady = state.batch?.ready !== false;
+  const hasSummary = Boolean(state.batch?.summary_pdf_url);
+  const exportReady = state.batch?.ready !== false;
 
-    generateButton.disabled = !urls.generate || !exportReady;
-    confirmButton.disabled = !hasSummary || !state.reviewed || state.confirmed || !urls.confirm;
-    sendSummaryButton.disabled = !state.confirmed || !urls.sendSummary || state.batch.summary_delivery.status !== "not_sent";
-    sendEmployeesButton.disabled = !state.confirmed || !urls.sendEmployees || state.batch.employee_delivery.status !== "not_sent";
+  const summaryAlreadySent =
+    state.batch?.summary_delivery?.status === "sent";
+
+  const employeesAlreadySent =
+    state.batch?.employee_delivery?.status === "sent";
+
+  generateButton.disabled =
+    state.isSending ||
+    !urls.generate ||
+    !exportReady;
+
+  confirmButton.disabled =
+    !hasSummary ||
+    !state.reviewed ||
+    state.confirmed ||
+    !urls.confirm;
+
+  sendSummaryButton.disabled =
+    state.isSending ||
+    !state.confirmed ||
+    !urls.sendSummary ||
+    summaryAlreadySent;
+
+  sendEmployeesButton.disabled =
+    state.isSending ||
+    !state.confirmed ||
+    !urls.sendEmployees ||
+    employeesAlreadySent;
 }
 
 async function generateReports() {
   generateButton.disabled = true;
   generationStatus.textContent = "Generating PDFs…";
+  state.batch = null;
   state.confirmed = false;
   state.reviewed = false;
   summaryReviewCheckbox.checked = false;
@@ -251,43 +279,48 @@ async function generateReports() {
 }
 
 async function confirmReview() {
-    confirmButton.disabled = true;
-    reviewStatus.textContent = "Saving confirmation…";
-
-    try {
-      const data = await requestJson(urls.confirm, {
-        method: "POST",
-        body: JSON.stringify({ reviewed: true })
-      });
-      
-      state.confirmed = true;
-      renderBatch({ ...state.batch, ...data, confirmed: true, reviewed: true });
-      setNotice();
-    } catch (error) {
-        reviewStatus.textContent = error.message;
-        setNotice("Confirmation failed", error.message, { error: true });
-    } finally {
-        setButtons();
-    }
+  confirmButton.disabled = true;
+  reviewStatus.textContent = "Saving confirmation…";
+  
+  try {
+    const data = await requestJson(urls.confirm, {
+      method: "POST",
+      body: JSON.stringify({ reviewed: true })
+    });
+    
+    state.confirmed = true;
+    renderBatch({ ...state.batch, ...data, confirmed: true, reviewed: true });
+    setNotice();
+  } catch (error) {
+      reviewStatus.textContent = error.message;
+      setNotice("Confirmation failed", error.message, { error: true });
+  } finally {
+      setButtons();
+  }
 }
 
-async function sendReports(url, button, statusElement, message) {
-    button.disabled = true;
-    statusElement.textContent = `${message}...`;
+async function sendReports(url, statusElement, message) {
+  state.isSending = true;
+  setButtons();
+  
+  statusElement.textContent = `${message}...`;
 
-    try {
-      const data = await requestJson(url, { method: "POST", body: JSON.stringify({}) });
-      renderBatch({ ...state.batch, ...data, confirmed: true });
-      statusElement.textContent = data.message || "Delivery completed";
-      setNotice();
-
-      renderEmployeeReports(data.employee_reports || [])
-    } catch (error) {
-      statusElement.textContent = error.message;
-      setNotice("Delivery finished with an error", error.message, { error: true });
-    } finally {
-      setButtons();
-    }
+  try {
+    const data = await requestJson(url, {
+      method: "POST",
+      body: JSON.stringify({})
+    });
+    
+    renderBatch({ ...state.batch, ...data, confirmed: true });
+    statusElement.textContent = data.message || "Delivery completed";
+    setNotice();
+  } catch (error) {
+    statusElement.textContent = error.message;
+    setNotice("Delivery finished with an error", error.message, { error: true });
+  } finally {
+    state.isSending = false;
+    setButtons();
+  }
 }
 
 summaryReviewCheckbox.addEventListener("change", () => {
@@ -302,7 +335,6 @@ sendSummaryButton.addEventListener("click", () =>
 {
   sendReports(
     urls.sendSummary,
-    sendSummaryButton,
     summaryDeliveryStatus,
     "Sending summary to managers"
   )
@@ -312,7 +344,6 @@ sendEmployeesButton.addEventListener("click", () =>
 {
   sendReports(
     urls.sendEmployees,
-    sendEmployeesButton,
     employeeDeliveryStatus,
     "Sending employee PDFs"
   )

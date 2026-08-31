@@ -26,7 +26,7 @@ from googleapiclient.errors import HttpError
 from accounts.google_oauth import build_google_client_config
 from accounts.models import GoogleConnection
 from .google_gmail_client import GoogleGmailClient
-from .models import WorkspaceConfiguration
+from .models import WorkspaceConfiguration, default_summary_pdf_state
 from employees.models import Employee, EmployeeMonth
 from .google_resources import parse_resource_id
 from .csv_parser import parse_csv_content
@@ -794,7 +794,7 @@ def pdf_export_status(request):
         return JsonResponse({"error": str(error)}, status=502)
 
     summary_delivery = {
-        "status": "not sent",
+        "status": "not_sent",
         "sent_count": 0,
     }
     employee_delivery = {
@@ -861,6 +861,7 @@ def pdf_export_status(request):
 @login_required
 @require_POST
 def pdf_export_generate(request):
+    
     connection: GoogleConnection = getattr(request.user, "google_connection", None)
     configuration: WorkspaceConfiguration = getattr(request.user, "owned_workspace", None)
     validation_response = validate_connection_and_configuration(connection, configuration)
@@ -870,10 +871,15 @@ def pdf_export_generate(request):
     delivery_state = configuration.delivery_state
     if delivery_state:
         delivery_state = {}
+        configuration._save_delivery_state(delivery_state)
     else:
         period_key = f"{configuration.period_year}-{configuration.period_month:02d}"
         delivery_state.setdefault(period_key, {"managers": [], "employees": []})
         configuration._save_delivery_state(delivery_state)
+
+    summary_pdf_confirm_and_review_state = configuration.summary_pdf_confirm_and_review_state
+    if summary_pdf_confirm_and_review_state:
+        configuration._save_summary_pdf_confirm_and_review_state(default_summary_pdf_state())
         
     try:
         google_drive_client, google_sheets_client, _, folder, spreadsheet = get_validated_workspace_resources(
@@ -1125,8 +1131,7 @@ def pdf_export_send_employees(request):
                 report.get("name", f"Schicht_{employee.first_name}_{export_state['german_month']}_{export_state['year']}_EXPORT.pdf"), 
                 content
             )
-            response = gmail_client.send(email_message)
-            print(response)
+            gmail_client.send(email_message)
             
             period_state["employees"].append(employee_key)
             results.append(

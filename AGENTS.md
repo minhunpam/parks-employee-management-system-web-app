@@ -11,6 +11,10 @@
 - If I tell you to implement something and my wording is confusing, please ask me more questions so that we are both on the same side
 - Implementation of a new feature always has to include tests
 
+### JS code
+- Always 2-space indented
+
+
 ### Writing documentation
 - When writng, keep the format clean:
   - Don't span lines crazily

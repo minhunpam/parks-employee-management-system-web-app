@@ -123,7 +123,6 @@ class GoogleDriveClient:
             delivery_state = (
                 "sent" if employee and employee.pk in sent_employees else "not_sent"
             )
-            print(delivery_state)
                 
             employee_export_files.append(
                 {
