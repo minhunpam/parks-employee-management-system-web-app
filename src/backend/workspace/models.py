@@ -10,20 +10,14 @@ def default_summary_pdf_state():
 
 
 class WorkspaceConfiguration(models.Model):
-    owner = models.OneToOneField(
+    owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
-        related_name="owned_workspace",
+        related_name="workspace_configurations",
     )
 
-    root_folder_id = models.CharField(
-        max_length=255,
-        unique=True,
-    )
-    spreadsheet_id = models.CharField(
-        max_length=255,
-        blank=True,
-    )
+    root_folder_id = models.CharField(max_length=255)
+    spreadsheet_id = models.CharField(max_length=255)
 
     period_month = models.PositiveSmallIntegerField()
 
@@ -38,8 +32,12 @@ class WorkspaceConfiguration(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["spreadsheet_id", "period_month", "period_year"],
-                name="unique_spreadsheet_month_year",
+                fields=["owner", "spreadsheet_id"],
+                name="unique_owner_spreadsheet",
+            ),
+            models.UniqueConstraint(
+                fields=["owner", "period_month", "period_year"],
+                name="unique_owner_period",
             )
         ]
 

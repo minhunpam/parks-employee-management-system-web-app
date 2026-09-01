@@ -5,6 +5,8 @@ from unittest.mock import Mock, patch
 # Django modules
 from django.conf import settings
 from django.test import SimpleTestCase, TestCase
+from django.db import IntegrityError, transaction
+from django.urls import reverse
 from decimal import Decimal
 
 # Local modules
@@ -13,6 +15,70 @@ from .google_oauth import build_services
 from .csv_parser import handle_entries, public_holidays
 from .google_sheets_client import GoogleSheetsClient
 from employees.models import Employee, EmployeeMonth, EmployeeYear
+from accounts.models import User
+from .models import WorkspaceConfiguration
+
+
+class WorkspaceConfigurationTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email="owner@example.com", password="password")
+        self.other_user = User.objects.create_user(email="other@example.com", password="password")
+
+    def configuration(self, **overrides):
+        values = {
+            "owner": self.user,
+            "root_folder_id": "folder-id",
+            "spreadsheet_id": "spreadsheet-id",
+            "period_month": 1,
+            "period_year": 2026,
+        }
+        values.update(overrides)
+        return WorkspaceConfiguration.objects.create(**values)
+
+    def test_user_can_have_multiple_period_configurations(self):
+        january = self.configuration()
+        february = self.configuration(
+            spreadsheet_id="february-sheet",
+            period_month=2,
+        )
+
+        self.assertEqual(self.user.workspace_configurations.count(), 2)
+        self.assertIsNone(self.user.active_configuration)
+
+        self.user.active_configuration = february
+        self.user.save(update_fields=["active_configuration"])
+        self.assertEqual(self.user.refresh_from_db(), None)
+        self.assertEqual(self.user.active_configuration, february)
+        self.assertEqual(self.user.owned_workspace, february)
+
+    def test_spreadsheet_is_unique_per_owner_but_can_be_reused_by_another_owner(self):
+        self.configuration()
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                self.configuration(period_month=2)
+
+        other_configuration = self.configuration(
+            owner=self.other_user,
+            period_month=2,
+        )
+        self.assertEqual(other_configuration.spreadsheet_id, "spreadsheet-id")
+
+    def test_period_is_unique_per_owner(self):
+        self.configuration()
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                self.configuration(spreadsheet_id="another-sheet")
+
+    def test_activate_configuration_requires_ownership(self):
+        configuration = self.configuration(owner=self.other_user)
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse("workspace:setup-activate", args=[configuration.pk])
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertIsNone(self.user.active_configuration)
 
 class ParseResourceIdTests(SimpleTestCase):
        def test_plain_folder_id(self):

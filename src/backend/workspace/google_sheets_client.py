@@ -237,7 +237,7 @@ class GoogleSheetsClient:
 
         return date_sort_value, time_sort_value
 
-    def replace_employee_entries(self, spreadsheet, spreadsheet_id, sheet_title, entries,):
+    def replace_employee_entries(self, spreadsheet, spreadsheet_id, sheet_title, entries, owner=None):
         existing_rows = self.read_sheet_values(spreadsheet_id, sheet_title,)
         affected_dates = set(entries.keys())
 
@@ -286,7 +286,7 @@ class GoogleSheetsClient:
             ).execute()
 
 
-        self._update_employee_summaries(sheet_title, rows)
+        self._update_employee_summaries(sheet_title, rows, owner=owner)
         
         return len(imported_rows)
 
@@ -295,14 +295,18 @@ class GoogleSheetsClient:
         return " ".join(str(value or "").split()).casefold()
 
     @classmethod
-    def _find_employee_for_sheet(cls, sheet_title):
+    def _find_employee_for_sheet(cls, sheet_title, owner=None):
         '''
         Fetch the employee from `sheet_title`
         '''
 
         normalized_title = cls._normalize_employee_name(sheet_title)
+        employee_queryset = Employee.objects.all()
+        if owner is not None:
+            employee_queryset = employee_queryset.filter(owner=owner)
+
         employees = [
-            employee for employee in Employee.objects.all()
+            employee for employee in employee_queryset
             if normalized_title in {
                 cls._normalize_employee_name(employee.first_name),
                 cls._normalize_employee_name(f"{employee.first_name} {employee.last_name}"),
@@ -358,8 +362,8 @@ class GoogleSheetsClient:
         }
 
     @classmethod
-    def _update_employee_summaries(cls, sheet_title, rows, year=None, month=None):
-        employee = cls._find_employee_for_sheet(sheet_title)
+    def _update_employee_summaries(cls, sheet_title, rows, year=None, month=None, owner=None):
+        employee = cls._find_employee_for_sheet(sheet_title, owner=owner)
         dated_rows = [
             row 
             for row in rows if row and row[0]

@@ -45,7 +45,10 @@ def build_snapshot(spreadsheet, sheets_client, spreadsheet_id, configuration):
         if not title:
             continue
             
-        employee = GoogleSheetsClient._find_employee_for_sheet(title)
+        employee = GoogleSheetsClient._find_employee_for_sheet(
+            title,
+            owner=configuration.owner,
+        )
         rows = sheets_client.read_sheet_values(spreadsheet_id, title)
         rows = [
             row for row in rows

@@ -41,6 +41,7 @@
         data-save-url="{% url 'workspace:setup-save' %}"
         data-successful-redirect-url="{% url 'workspace:entry' %}"
         data-connect-url="{% url 'workspace:connect' %}"
+        data-activate-url-template="{% url 'workspace:setup-activate' 0 %}"
     >
         <section class="bg-black text-white">
             <div class="mx-auto max-w-7xl px-6 py-14 lg:px-8 lg:py-20">
@@ -54,12 +55,26 @@
             <div>
                 <form id="setup-form" class="border border-[#cccccc] bg-white p-6 sm:p-8">
                     {% csrf_token %}
-                    <div class="mb-8 border-b border-[#cccccc] pb-6">
+                    <div class="mb-6 border-b border-[#cccccc] pb-6">
                         <h2 class="text-2xl font-bold">Workspace resources</h2>
-                        <p class="mt-2 text-sm leading-6 text-[#757575]">Paste an ID or a complete Google Drive / Google Sheets URL. PARKS will check that both resources exist and are writable.</p>
+                        
+                        <p class="mt-2 text-sm leading-6 text-[#757575]">The selected period is used by the complete import and export pipeline.</p>
+                        
+                        {% if configurations %}
+                        <label for="active-configuration" class="mt-4 block text-sm font-bold">Active period</label>
+                        <select id="active-configuration" class="mt-2 block h-11 w-full border border-[#cccccc] bg-white px-4 text-base text-black focus:border-2 focus:border-[#76b900] focus:outline-none">
+                            {% for item in configurations %}
+                            <option value="{{ item.pk }}" {% if item.pk == configuration.pk %}selected{% endif %}>
+                                {{ item.period_month }}/{{ item.period_year }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        {% endif %}
+                        
                     </div>
 
                     <div class="space-y-6">
+                        <p class="text-sm leading-6 text-[#757575]">Paste an ID or a complete Google Drive / Google Sheets URL. PARKS will check that both resources exist and are writable.</p>
                         <div>
                             <label for="root-folder-id" class="block text-base font-bold">Drive root folder</label>
                             <p class="mt-1 text-sm text-[#757575]">The folder containing Import, CSV Archiv, Final_csv, and Final_pdf.</p>
@@ -147,6 +162,7 @@
                 <span class="mb-6 block h-3 w-3 bg-[#76b900]" aria-hidden="true"></span>
                 <h2 id="saved-resources" class="text-xl font-bold">Current connection</h2>
                 {% if configuration %}
+                    <p class="mt-2 text-sm text-[#757575]">This is the period currently used by the pipeline.</p>
                     <dl class="mt-6 divide-y divide-[#cccccc] border-y border-[#cccccc]">
                         <div class="py-4">
                             <dt class="text-xs font-bold uppercase tracking-wide text-[#757575]">Drive root folder</dt>

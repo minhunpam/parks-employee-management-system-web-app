@@ -55,7 +55,10 @@ class GoogleDriveClient:
 
             employee_firstname = match.group("employee_firstname")
             try:
-                _ = Employee.objects.get(first_name__iexact=employee_firstname)
+                _ = Employee.objects.get(
+                    owner=configuration.owner,
+                    first_name__iexact=employee_firstname,
+                )
             except ObjectDoesNotExist:
                 not_employee_list.append(employee_firstname)
 
@@ -117,7 +120,8 @@ class GoogleDriveClient:
                 continue
 
             employee = Employee.objects.filter(
-                first_name__iexact=match.group("employee")
+                owner=configuration.owner,
+                first_name__iexact=match.group("employee"),
             ).first()
 
             delivery_state = (

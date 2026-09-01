@@ -4,6 +4,7 @@ const page = document.querySelector("#setup-page");
 const saveUrl = page.dataset.saveUrl;
 const successfulRedirectUrl = page.dataset.successfulRedirectUrl;
 const connectUrl = page.dataset.connectUrl;
+const activateUrlTemplate = page.dataset.activateUrlTemplate;
 
 const form = document.querySelector("#setup-form");
 const rootFolderInput = document.querySelector("#root-folder-id");
@@ -19,6 +20,7 @@ const reconnectGoogle = document.querySelector("#reconnect-google");
 const confirmationDialog = document.querySelector("#workspace-confirmation-dialog");
 const confirmationMessage = document.querySelector("#workspace-confirmation-message");
 const confirmationInput = document.querySelector("#workspace-confirmation-input");
+const activeConfigurationInput = document.querySelector("#active-configuration");
 
 const sessionStorageDraftKey = "workspace-setup-draft";
 
@@ -45,6 +47,25 @@ function restoreDraft() {
 }
 
 restoreDraft();
+
+activeConfigurationInput?.addEventListener("change", async () => {
+    setupStatus.textContent = "Switching active period…";
+    const activateUrl = activateUrlTemplate.replace("/0/", `/${activeConfigurationInput.value}/`);
+
+    try {
+        const response = await fetch(activateUrl, {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken() },
+        });
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.error || "Could not switch period.");
+        }
+        window.location.reload();
+    } catch (error) {
+        setupStatus.textContent = error.message;
+    }
+});
 
 function showWorkspaceConfirmation(confirmationPhrase) {
   return new Promise((resolve) => {

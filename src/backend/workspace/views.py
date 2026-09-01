@@ -14,6 +14,7 @@ from django.urls import reverse
 from django.conf import settings
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
 
 # Google modules
 from google.auth.exceptions import GoogleAuthError, RefreshError
@@ -249,6 +250,7 @@ def csv_import(request):
                 spreadsheet_id,
                 sheet_title,
                 file["entries"],
+                owner=request.user,
             )
             
             imported_files.append(file)
@@ -429,17 +431,46 @@ def setup(request):
     ):
         return redirect("workspace:connect")
 
-    configuration = (
+    configurations = list(
         WorkspaceConfiguration.objects
-        .select_related("owner")
         .filter(owner=request.user)
-        .first()
+        .order_by("-period_year", "-period_month")
     )
+    configuration = request.user.owned_workspace
 
     return render(
         request,
         "workspace/setup.html",
-        {"configuration": configuration},
+        {
+            "configuration": configuration,
+            "configurations": configurations,
+        },
+    )
+
+@login_required
+@require_POST
+def activate_configuration(request, configuration_id):
+    configuration = WorkspaceConfiguration.objects.filter(
+        pk=configuration_id,
+        owner=request.user,
+    ).first()
+    
+    if configuration is None:
+        return JsonResponse(
+            {
+                "error": "Configuration not found."
+            }, 
+            status=404
+        )
+
+    request.user.active_configuration = configuration
+    request.user.save(update_fields=["active_configuration"])
+    
+    return JsonResponse(
+        {
+            "status": "active", 
+            "period": configuration.config_period_str
+        }
     )
 
 @login_required
@@ -475,12 +506,15 @@ def save_setup(request):
     if not 2000 <= period_year <= 2099:
         return JsonResponse({"error": "The import year must be between 2000 and 2099."}, status=400)
 
-    configuration: WorkspaceConfiguration = WorkspaceConfiguration.objects.filter(owner=request.user).first()
+    configuration = WorkspaceConfiguration.objects.filter(
+        owner=request.user,
+        period_month=period_month,
+        period_year=period_year,
+    ).first()
+    
     changed = configuration and (
         configuration.root_folder_id != root_folder_id
         or configuration.spreadsheet_id != spreadsheet_id
-        or configuration.period_month != period_month
-        or configuration.period_year != period_year
         or configuration.manager_recipients != manager_recipients
     )
     if changed and payload.get("confirmation") != "CHANGE WORKSPACE CONFIG":
@@ -519,7 +553,17 @@ def save_setup(request):
     configuration.period_month = period_month
     configuration.period_year = period_year
     configuration.manager_recipients = manager_recipients
-    configuration.save()
+    
+    try:
+        with transaction.atomic():
+            configuration.save()
+            request.user.active_configuration = configuration
+            request.user.save(update_fields=["active_configuration"])
+    except IntegrityError:
+        return JsonResponse(
+            {"error": "This spreadsheet is already configured for your account."},
+            status=409,
+        )
     
     return JsonResponse(
         {
@@ -590,7 +634,10 @@ def sheets_preview_overview(request):
                 continue
 
             raw_rows = google_sheets_client.read_sheet_values(spreadsheet_id, sheet_title)
-            employee = GoogleSheetsClient._find_employee_for_sheet(sheet_title)
+            employee = GoogleSheetsClient._find_employee_for_sheet(
+                sheet_title,
+                owner=request.user,
+            )
 
             # Google Sheets is the source of truth for daily activity. Rebuild
             # the database summaries before reading them for the overview.
@@ -599,6 +646,7 @@ def sheets_preview_overview(request):
                 raw_rows,
                 year=configuration.period_year,
                 month=configuration.period_month,
+                owner=request.user,
             )
 
             rows = [
@@ -1110,7 +1158,10 @@ def pdf_export_send_employees(request):
     
     results = []
     for report in export_state["employee_export_files"]:
-        employee = Employee.objects.filter(first_name__iexact=report["employee"]).first()
+        employee = Employee.objects.filter(
+            owner=configuration.owner,
+            first_name__iexact=report["employee"],
+        ).first()
         
         if employee is None or not employee.email:
             results.append({"employee": report["employee"], "status": "failed", "error": "Employee email is missing."})

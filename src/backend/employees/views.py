@@ -39,7 +39,7 @@ def employee_dashboard_data(request):
         return JsonResponse({"error": "Invalid pagination values."}, status=400)
 
     if tab == "employees":
-        queryset = Employee.objects.all()
+        queryset = Employee.objects.filter(owner=request.user)
         if search:
             queryset = queryset.filter(
                 models.Q(first_name__icontains=search)
@@ -80,7 +80,7 @@ def employee_dashboard_data(request):
         })
 
     if tab == "monthly":
-        queryset = EmployeeMonth.objects.select_related("employee").all()
+        queryset = EmployeeMonth.objects.select_related("employee").filter(employee__owner=request.user)
         if search:
             queryset = queryset.filter(
                 models.Q(employee__first_name__icontains=search)
@@ -129,7 +129,7 @@ def employee_dashboard_data(request):
         })
 
     if tab == "yearly":
-        queryset = EmployeeYear.objects.select_related("employee").all()
+        queryset = EmployeeYear.objects.select_related("employee").filter(employee__owner=request.user)
         if search:
             queryset = queryset.filter(
                 models.Q(employee__first_name__icontains=search)
@@ -185,6 +185,7 @@ def register(request):
         payload = json.loads(request.body)
     
         registered_employee = Employee(
+            owner=request.user,
             first_name=payload["first_name"],
             last_name=payload["last_name"],
             email=payload["email"],
@@ -221,7 +222,7 @@ def register(request):
 @login_required
 @require_http_methods(["GET", "PATCH"])
 def employee_details(request, employee_id):
-    employee = get_object_or_404(Employee, pk=employee_id)
+    employee = get_object_or_404(Employee, pk=employee_id, owner=request.user)
 
     if request.method == "PATCH":
         try:
