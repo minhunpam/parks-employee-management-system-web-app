@@ -80,6 +80,24 @@ class WorkspaceConfigurationTests(TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertIsNone(self.user.active_configuration)
 
+    def test_create_endpoint_rejects_existing_period(self):
+        self.configuration()
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse("workspace:configuration-create"),
+            data={
+                "root_folder_id": "other-folder",
+                "spreadsheet_id": "other-sheet",
+                "period_month": 1,
+                "period_year": 2026,
+                "manager_recipients": [],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 409)
+
 class ParseResourceIdTests(SimpleTestCase):
        def test_plain_folder_id(self):
            result = parse_resource_id("folder123", "folder")

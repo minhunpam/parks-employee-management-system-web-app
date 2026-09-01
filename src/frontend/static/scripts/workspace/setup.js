@@ -1,7 +1,8 @@
 import { csrfToken } from "../common.js";
 
 const page = document.querySelector("#setup-page");
-const saveUrl = page.dataset.saveUrl;
+const createUrl = page.dataset.createUrl;
+const updateUrlTemplate = page.dataset.updateUrlTemplate;
 const successfulRedirectUrl = page.dataset.successfulRedirectUrl;
 const connectUrl = page.dataset.connectUrl;
 const activateUrlTemplate = page.dataset.activateUrlTemplate;
@@ -21,6 +22,9 @@ const confirmationDialog = document.querySelector("#workspace-confirmation-dialo
 const confirmationMessage = document.querySelector("#workspace-confirmation-message");
 const confirmationInput = document.querySelector("#workspace-confirmation-input");
 const activeConfigurationInput = document.querySelector("#active-configuration");
+const newConfigurationButton = document.querySelector("#new-configuration");
+
+let editingConfigurationId = activeConfigurationInput?.value || null;
 
 const sessionStorageDraftKey = "workspace-setup-draft";
 
@@ -47,6 +51,20 @@ function restoreDraft() {
 }
 
 restoreDraft();
+
+newConfigurationButton?.addEventListener("click", () => {
+  editingConfigurationId = null;
+  form.reset();
+  
+  rootFolderInput.value = "";
+  spreadsheetInput.value = "";
+  periodMonthInput.value = "";
+  periodYearInput.value = "";
+  managerRecipientsInput.value = "";
+  
+  setupStatus.textContent = "Enter the resources for the new period.";
+  rootFolderInput.focus();
+});
 
 activeConfigurationInput?.addEventListener("change", async () => {
     setupStatus.textContent = "Switching active period…";
@@ -108,8 +126,12 @@ function showWorkspaceConfirmation(confirmationPhrase) {
 
 
 async function saveSetup(payload) {
-    const response = await fetch(saveUrl, {
-        method: "POST",
+    const isCreating = editingConfigurationId === null;
+    const url = isCreating
+        ? createUrl
+        : updateUrlTemplate.replace("/0/", `/${editingConfigurationId}/`);
+    const response = await fetch(url, {
+        method: isCreating ? "POST" : "PATCH",
         headers: {
             "Content-Type": "application/json",
             "X-CSRFToken": csrfToken(),

@@ -38,10 +38,11 @@
     </div>
 
     <main class="flex-1" id="setup-page"
-        data-save-url="{% url 'workspace:setup-save' %}"
+        data-create-url="{% url 'workspace:configuration-create' %}"
+        data-update-url-template="{% url 'workspace:configuration-update' 0 %}"
         data-successful-redirect-url="{% url 'workspace:entry' %}"
         data-connect-url="{% url 'workspace:connect' %}"
-        data-activate-url-template="{% url 'workspace:setup-activate' 0 %}"
+        data-activate-url-template="{% url 'workspace:configuration-activate' configuration_id=0 %}"
     >
         <section class="bg-black text-white">
             <div class="mx-auto max-w-7xl px-6 py-14 lg:px-8 lg:py-20">
@@ -58,7 +59,7 @@
                     <div class="mb-6 border-b border-[#cccccc] pb-6">
                         <h2 class="text-2xl font-bold">Workspace resources</h2>
                         
-                        <p class="mt-2 text-sm leading-6 text-[#757575]">The selected period is used by the complete import and export pipeline.</p>
+                        <p id="configuration-form-heading" class="mt-2 text-sm leading-6 text-[#757575]">The selected period is used by the complete import and export pipeline.</p>
                         
                         {% if configurations %}
                         <label for="active-configuration" class="mt-4 block text-sm font-bold">Active period</label>
@@ -70,6 +71,7 @@
                             {% endfor %}
                         </select>
                         {% endif %}
+                        <button id="new-configuration" type="button" class="mt-4 inline-flex min-h-11 items-center border border-[#76b900] px-5 py-3 text-sm font-bold text-black transition hover:bg-[#f7f7f7] focus:outline-none focus:ring-2 focus:ring-[#76b900]">Create new period</button>
                         
                     </div>
 

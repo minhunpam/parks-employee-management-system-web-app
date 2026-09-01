@@ -6,7 +6,7 @@ import secrets
 import json
 
 # Django modules
-from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.http import require_GET, require_POST, require_http_methods
 from django.http import HttpResponseBadRequest, JsonResponse
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
@@ -474,20 +474,18 @@ def activate_configuration(request, configuration_id):
     )
 
 @login_required
-@require_POST
-def save_setup(request):
+@require_http_methods(["POST", "PATCH"])
+def save_configuration(request, configuration_id=None):
     
     try:
         payload = json.loads(request.body)
-        root_folder_id = parse_resource_id(
-            payload.get("root_folder_id", ""), "folder"
-        )
-        spreadsheet_id = parse_resource_id(
-            payload.get("spreadsheet_id", ""), "spreadsheet"
-        )
+        root_folder_id = parse_resource_id(payload.get("root_folder_id", ""), "folder")
+        spreadsheet_id = parse_resource_id(payload.get("spreadsheet_id", ""), "spreadsheet")
+        
         period_month = int(payload.get("period_month", ""))
         period_year = int(payload.get("period_year", ""))
         manager_recipients = payload.get("manager_recipients", [])
+        
         if not isinstance(manager_recipients, list):
             raise ValueError("Manager recipients must be a list of email addresses.")
         manager_recipients = list(dict.fromkeys(
@@ -506,15 +504,33 @@ def save_setup(request):
     if not 2000 <= period_year <= 2099:
         return JsonResponse({"error": "The import year must be between 2000 and 2099."}, status=400)
 
-    configuration = WorkspaceConfiguration.objects.filter(
-        owner=request.user,
-        period_month=period_month,
-        period_year=period_year,
-    ).first()
-    
+    if configuration_id is not None:
+        configuration = WorkspaceConfiguration.objects.filter(
+            pk=configuration_id,
+            owner=request.user,
+        ).first()
+        if configuration is None:
+            return JsonResponse({"error": "Configuration not found."}, status=404)
+    else:
+        configuration = WorkspaceConfiguration.objects.filter(
+            owner=request.user,
+            period_month=period_month,
+            period_year=period_year,
+        ).first()
+        
+        if configuration is not None:
+            return JsonResponse(
+                {
+                    "error": "This period is already configured. Edit the existing configuration instead."
+                },
+                status=409,
+            )
+
     changed = configuration and (
         configuration.root_folder_id != root_folder_id
         or configuration.spreadsheet_id != spreadsheet_id
+        or configuration.period_month != period_month
+        or configuration.period_year != period_year
         or configuration.manager_recipients != manager_recipients
     )
     if changed and payload.get("confirmation") != "CHANGE WORKSPACE CONFIG":
@@ -561,7 +577,9 @@ def save_setup(request):
             request.user.save(update_fields=["active_configuration"])
     except IntegrityError:
         return JsonResponse(
-            {"error": "This spreadsheet is already configured for your account."},
+            {
+                "error": "This period or spreadsheet is already configured for your account."
+            },
             status=409,
         )
     
@@ -577,6 +595,19 @@ def save_setup(request):
         },
         status=200,
     )
+
+
+@login_required
+@require_POST
+def create_configuration(request):
+    return save_configuration(request)
+
+
+@login_required
+@require_http_methods(["PATCH"])
+def update_configuration(request, configuration_id):
+    return save_configuration(request, configuration_id=configuration_id)
+
 
 @login_required
 def sheets_preview(request):
