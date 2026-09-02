@@ -381,6 +381,37 @@ class ManagerEmailTests(SimpleTestCase):
         self.assertEqual(results, [{"recipient": "manager@example.com", "status": "sent"}])
         gmail_client.send.assert_not_called()
 
+    def test_employee_delivery_response_contains_updated_report_statuses(self):
+        from .views import _employee_delivery_reports
+
+        export_state = {
+            "employee_export_files": [
+                {
+                    "employee": "Ademir",
+                    "file_id": "file-1",
+                    "delivery_status": "not_sent",
+                    "error": None,
+                },
+                {
+                    "employee": "Lena",
+                    "file_id": "file-2",
+                    "delivery_status": "not_sent",
+                    "error": None,
+                },
+            ]
+        }
+        results = [
+            {"employee": "Ademir", "status": "sent"},
+            {"employee": "Lena", "status": "failed", "error": "Email is unavailable."},
+        ]
+
+        reports = _employee_delivery_reports(export_state, results)
+
+        self.assertEqual(reports[0]["delivery_status"], "sent")
+        self.assertIsNone(reports[0]["error"])
+        self.assertEqual(reports[1]["delivery_status"], "failed")
+        self.assertEqual(reports[1]["error"], "Email is unavailable.")
+
     def test_builds_employee_email_with_personal_pdf_and_message(self):
         from .email_delivery import build_employee_email
 

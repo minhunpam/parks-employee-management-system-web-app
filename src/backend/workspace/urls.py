@@ -7,7 +7,6 @@ from .views import (
     connect,
     connect_callback,
     setup,
-    save_configuration,
     create_configuration,
     update_configuration,
     activate_configuration,

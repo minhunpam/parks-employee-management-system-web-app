@@ -1030,6 +1030,23 @@ def pdf_export_generate(request):
         "employee_reports": employee_reports,
     }}, status=200)
 
+def _employee_delivery_reports(export_state, results):
+    results_by_employee = {result["employee"]: result for result in results}
+    employee_reports = []
+    
+    for report in export_state["employee_export_files"]:
+        delivery_result = results_by_employee.get(report["employee"])
+        employee_report = {**report}
+        
+        if delivery_result:
+            employee_report["delivery_status"] = delivery_result["status"]
+            employee_report["error"] = delivery_result.get("error")
+            
+        employee_reports.append(employee_report)
+        
+    return employee_reports
+
+
 def _pdf_delivery_context(request):
     connection: GoogleConnection = getattr(request.user, "google_connection", None)
     configuration: WorkspaceConfiguration = getattr(request.user, "owned_workspace", None)
@@ -1195,12 +1212,22 @@ def pdf_export_send_employees(request):
         ).first()
         
         if employee is None or not employee.email:
-            results.append({"employee": report["employee"], "status": "failed", "error": "Employee email is missing."})
+            results.append(
+                {
+                    "employee": report["employee"], 
+                    "status": "failed", 
+                    "error": "Employee email is missing."
+                })
             continue
             
         employee_key = int(employee.pk)
         if employee_key in period_state["employees"]:
-            results.append({"employee": report["employee"], "status": "sent"})
+            results.append(
+                {
+                    "employee": report["employee"], 
+                    "status": "sent"
+                }
+            )
             continue
         try:
             content = drive_client.download_file_content(report["file_id"])
@@ -1234,6 +1261,8 @@ def pdf_export_send_employees(request):
             
     configuration._save_delivery_state(delivery_state)
     failed = [result for result in results if result["status"] == "failed"]
+    employee_reports = _employee_delivery_reports(export_state, results)
+
     return JsonResponse(
         {
             "data": 
@@ -1242,7 +1271,8 @@ def pdf_export_send_employees(request):
                         {
                             "status": "failed" if failed else "sent", "message": f"Sent to {len(results) - len(failed)} employee(s).", 
                             "sent_count": len(results) - len(failed), "failed_count": len(failed)
-                        }
+                        },
+                    "employee_reports": employee_reports,
                 }
         }, 
         status=200

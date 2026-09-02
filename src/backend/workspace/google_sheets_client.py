@@ -148,7 +148,7 @@ class GoogleSheetsClient:
         pause_end = ""
         warnings = ["Manuell"]
         working_minutes = 0
-        pause_minutes = 0
+        pause_minutes = 30
         
         if type_of_day == "Arbeit" and shift_start and shift_end:
             shift_start_minutes = time_to_minutes(shift_start)
