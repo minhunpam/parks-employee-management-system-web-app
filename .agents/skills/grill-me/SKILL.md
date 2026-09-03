@@ -4,21 +4,11 @@ description: Grill the user relentlessly about a plan, decision, or idea. Use wh
 disable-model-invocation: true
 ---
 
-Work the tree in **rounds**. The **frontier** is every decision whose prerequisites are already settled: the questions you can ask _now_ without guessing at answers you haven't heard yet. Ask the whole frontier in one round: number each question and give your recommended answer. Then wait for the user's answers before the next round.
+Work the tree in **rounds**. The **frontier** is every decision whose prerequisites are already settled: the questions you can ask _now_ without guessing at answers you haven't heard yet. Ask the whole frontier in one round: up to 4 questions, each with its options as short bullet points, your recommended option prefixed with "(Recommended)", and the real trade-off named in one line per option. In each round, explicitly show the number of the current round in format: `Round <round_number>`
 
-Format a round like so:
+Then wait for the user's answers before the next round.
 
-```
-❓ **Q1** - **<question title>**: <question body, might be multiple paragraphs, including multiple choices>
-
-➡️ <your recommended answer>
-
----
-
-❓ **Q2** - **<question title>**: <question body, might be multiple paragraphs, including multiple choices>
-
-➡️ <your recommended answer>
-```
+Keep questions short enough but still need to convey core ideas so that I can answer the whole round in one reply. For questions that need longer body and those that you expect me to answer in detail, get no options - ask it standalone and let me in answer in grose
 
 Each round the user answers reshapes the tree: settled decisions push the frontier outward and unblock questions that depended on them. Recompute the frontier and ask the next round. A question whose answer depends on another question still open in this round belongs to a _later_ round, not this one.
 
