@@ -74,7 +74,7 @@ class WorkspaceConfigurationTests(TestCase):
         self.client.force_login(self.user)
 
         response = self.client.post(
-            reverse("workspace:setup-activate", args=[configuration.pk])
+            reverse("workspace:configuration-activate", args=[configuration.pk])
         )
 
         self.assertEqual(response.status_code, 404)

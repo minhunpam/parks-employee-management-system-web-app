@@ -1,7 +1,7 @@
 ---
 name: grill-me
 description: Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases.
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 Work the tree in **rounds**. The **frontier** is every decision whose prerequisites are already settled: the questions you can ask _now_ without guessing at answers you haven't heard yet. Ask the whole frontier in one round: up to 4 questions, each with its options as short bullet points, your recommended option prefixed with "(Recommended)", and the real trade-off named in one line per option. In each round, explicitly show the number of the current round in format: `Round <round_number>`
