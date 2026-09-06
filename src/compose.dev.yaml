@@ -1,0 +1,12 @@
+services:
+  db:
+    ports:
+      - "5432:5432"
+
+  web:
+    env_file:
+      - ../.env
+
+  nginx:
+    ports:
+      - "8000:80"
