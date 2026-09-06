@@ -12,7 +12,6 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 import os
-from django.conf import STATICFILES_STORAGE_ALIAS
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -185,10 +184,10 @@ DRIVE_SCOPES = [
     *GOOGLE_OAUTH_SCOPES,
     "https://www.googleapis.com/auth/drive",
     "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/gmail.send", 
+    "https://www.googleapis.com/auth/gmail.send",
 ]
 
-# This is used by the @login_required decorator 
+# This is used by the @login_required decorator
 # to redirect users to the login page if they are not authenticated
 LOGIN_URL = "accounts:google-login"
 

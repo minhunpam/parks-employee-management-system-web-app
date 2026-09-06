@@ -36,7 +36,7 @@ class WorkspaceConfigurationTests(TestCase):
         return WorkspaceConfiguration.objects.create(**values)
 
     def test_user_can_have_multiple_period_configurations(self):
-        january = self.configuration()
+        self.configuration()
         february = self.configuration(
             spreadsheet_id="february-sheet",
             period_month=2,
@@ -151,7 +151,7 @@ class CsvParserTests(SimpleTestCase):
         gross working time > 6 hours && pause time < 30 minutes ---> fulfill the condition for pause correction
         '''
 
-        
+
         result = handle_entries(
             {
                 "04.06.2026": [
@@ -466,7 +466,7 @@ class BuildGoogleResourcesTests(SimpleTestCase):
 
         self.assertEqual(result, (drive_service, sheets_service, gmail_service))
 
-        
+
         fernet_class.assert_called_once_with(settings.FERNET_KEY)
         fernet.decrypt.assert_called_once_with(b"encrypted-token")
 
@@ -531,4 +531,3 @@ class BuildGoogleResourcesTests(SimpleTestCase):
         )
         gmail_service.users.return_value.getProfile.assert_called_once_with(userId="me")
         gmail_service.users.return_value.getProfile.return_value.execute.assert_called_once_with()
-        

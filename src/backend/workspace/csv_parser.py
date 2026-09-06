@@ -19,13 +19,13 @@ def parse_csv_content(content, file_name, expected_month, expected_year):
     employee_name = filename_match.group("employee_name")
 
     text = content.decode("windows-1252")
-    
+
     entries = {}
     days_in_month = calendar.monthrange(expected_year, expected_month)[1]
     for day in range(1, days_in_month + 1):
         date_str = f"{day:02d}.{expected_month:02d}.{expected_year}"
         entries[date_str] = []
-    
+
     normalized_data = []
     csv_reader = csv.reader(io.StringIO(text), delimiter=";")
     for row in csv_reader:
@@ -41,7 +41,7 @@ def parse_csv_content(content, file_name, expected_month, expected_year):
 
     employee_name_including_row = normalized_data[2]
     file_extracted_employee_name = employee_name_including_row[0]
-    if not employee_name in file_extracted_employee_name:
+    if employee_name not in file_extracted_employee_name:
         raise ValueError(
             f"CSV filename says: {employee_name}, but the file extracted name is {file_extracted_employee_name}. "
             f"Please inspect this file again."
@@ -50,7 +50,7 @@ def parse_csv_content(content, file_name, expected_month, expected_year):
     # Delete the first 4 rows and the last 3 rows which contain unnecessary data
     del normalized_data[0:4]
     del normalized_data[-3:]
-    
+
     for line_number, cells in enumerate(normalized_data, start=1):
         date_value = next(
             (
@@ -59,7 +59,7 @@ def parse_csv_content(content, file_name, expected_month, expected_year):
             ),
             None,
         )
-            
+
         parsed_date = datetime.strptime(date_value, "%d.%m.%Y")
         if (
             parsed_date.month != expected_month
@@ -72,7 +72,7 @@ def parse_csv_content(content, file_name, expected_month, expected_year):
                 '''
             )
 
-            
+
         times = [
             cell for cell in cells
             if re.fullmatch(r"\d{2}:\d{2}", cell)
@@ -94,7 +94,7 @@ def parse_csv_content(content, file_name, expected_month, expected_year):
             ),
             None,
         )
-        
+
         entries[date_value].append(
             {
                 "start": times[0],
@@ -102,7 +102,7 @@ def parse_csv_content(content, file_name, expected_month, expected_year):
                 "remark": remark,
             }
         )
-        
+
     if not entries:
         raise ValueError("The CSV contains no importable work entries.")
 
@@ -111,7 +111,7 @@ def parse_csv_content(content, file_name, expected_month, expected_year):
         entries,
         holiday_dates=holiday_dates,
     )
-    
+
     return {
         "employee": employee_name,
         "file_name": file_name,
@@ -162,7 +162,7 @@ def handle_entries(
         shift_start_minutes = time_to_minutes(shift_start)
         shift_end_minutes = time_to_minutes(shift_end)
         shift_gross_minutes = shift_end_minutes - shift_start_minutes
-        
+
         pause_windows = []
         warnings = []
 
@@ -185,7 +185,7 @@ def handle_entries(
                 warnings.append("LÜCKE")
 
         pause_minutes = sum(pause["minutes"] for pause in pause_windows)
-        
+
         pause_start = pause_windows[0]["start"] if pause_windows else ""
         pause_end = pause_windows[0]["end"] if pause_windows else ""
         working_minutes = max(shift_gross_minutes - pause_minutes, 0) # Avoid negative working minutes
@@ -223,11 +223,11 @@ def handle_entries(
             shift_end = minutes_to_time(shift_start_minutes + working_minutes + pause_minutes)
             warnings.append("P6")
 
-        
+
         if is_public_holiday and working_minutes != 0:
             working_minutes *= 2
             warnings.append("Feiertag-Arbeit")
-        
+
         resulted_entries[working_date] = {
             "shift_start": shift_start,
             "pause_start": pause_start,

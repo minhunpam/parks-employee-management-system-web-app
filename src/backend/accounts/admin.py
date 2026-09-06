@@ -28,7 +28,7 @@ class UserAdmin(BaseUserAdmin):
     '''
     fieldsets = (
         (
-            None, 
+            None,
             {
                 "fields": ("email", "password")
             }
@@ -61,7 +61,7 @@ class UserAdmin(BaseUserAdmin):
         (
             None,
             {
-                "classes": ("wide",), 
+                "classes": ("wide",),
                 # Applies Django Admin's `wide` CSS class to the fieldset
                 # It mainly effects the form layout and presentation
                 "fields": (
@@ -85,7 +85,7 @@ class GoogleConnectionAdmin(admin.ModelAdmin):
         "connected_at",
         "updated_at",
     ) # This controls which columns appear in the GoogleConnection overview table
-    
+
     search_fields = ("user__email", "subject")
 
     readonly_fields = (
@@ -103,4 +103,3 @@ class GoogleConnectionAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False
-    

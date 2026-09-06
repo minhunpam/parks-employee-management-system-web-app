@@ -1,0 +1,21 @@
+# Run with ruff check . --fix --unsafe-fixes --config ruff-fix.toml
+
+# Run with ruff check <(.|<target_directory>)> --fix --config linter/ruff-fix.toml
+exclude = [
+    '.venv',
+    '__pycache__',
+    '.egg-info',
+    '**/migrations/**',
+    ".ruff_cache",
+]
+force-exclude = true
+
+[lint]
+
+# See rules applied in formatting section of ruff_rules.md
+select = [
+    'E703', 'E713',
+    'F401', 'F841',
+    'SIM108',
+    'W291', 'W292', 'W293'
+]

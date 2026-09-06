@@ -33,15 +33,15 @@ class Employee(models.Model):
     class WorkingStatus(models.TextChoices):
         ACTIVE = "active", "Active"
         ARCHIVED = "archived", "Archived"
-        
+
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
     email = models.EmailField()
 
     # Working Status
     working_status = models.CharField(
-        max_length=10, 
-        choices=WorkingStatus.choices, 
+        max_length=10,
+        choices=WorkingStatus.choices,
         default=WorkingStatus.ACTIVE)
     employment_start_date = models.DateField()
     employment_end_date = models.DateField(null=True, blank=True)
@@ -157,12 +157,12 @@ class EmployeeMonth(models.Model):
             )
         ]
 
-    
+
     @override
     def save(self, *args, **kwargs):
         if self._state.adding and self.employee_id:
             self.target_working_hours = self.employee.monthly_target_hours
-        
+
         self.credited_working_hours = (
             self.paid_absence_hours + self.worked_hours
         )
@@ -170,11 +170,11 @@ class EmployeeMonth(models.Model):
         self.hour_difference = (
             self.credited_working_hours - self.target_working_hours
         )
-        
+
         self.closing_hour_account_balance = (
             self.opening_hour_account_balance + self.hour_difference
         )
-        
+
         self.closing_vacation_balance = (
             self.opening_vacation_balance - self.vacation_days_used
         )
@@ -189,6 +189,6 @@ class EmployeeMonth(models.Model):
             }
 
         super().save(*args, **kwargs)
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

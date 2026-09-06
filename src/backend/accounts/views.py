@@ -4,7 +4,6 @@ import secrets
 # Django modules
 from django.conf import settings
 from django.contrib.auth import login, logout
-from django.contrib.auth.views import login_required
 from django.http import HttpResponseBadRequest
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
@@ -27,14 +26,14 @@ def home(request):
     if request.user.is_authenticated:
         return redirect("workspace:entry")
 
-    
+
     return render(request, "accounts/home.html")
 
 
 def google_login(request):
     if request.user.is_authenticated:
         return redirect("workspace:entry")
-    
+
     client_config = build_google_client_config(
         redirect_uri=settings.GOOGLE_OAUTH_REDIRECT_URI
     )
@@ -146,7 +145,7 @@ def approval_pending(request):
         return redirect("workspace:entry")
 
     pending_user_id = request.session.get(PENDING_APPROVAL_USER_SESSION_KEY)
-    
+
     if not pending_user_id:
         return redirect("home")
 

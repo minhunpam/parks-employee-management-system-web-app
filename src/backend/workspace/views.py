@@ -1,5 +1,4 @@
 # Built-in modules
-import re
 
 from cryptography.fernet import Fernet
 import secrets
@@ -50,7 +49,7 @@ def entry(request):
     validation_response = validate_connection_and_configuration(connection, configuration)
     if validation_response is not None:
         return validation_response
-    
+
     return render(
         request,
         "workspace/entry.html",
@@ -180,10 +179,10 @@ def csv_import(request):
     import_state = context["import_state"]
     spreadsheet = context["spreadsheet"]
     spreadsheet_id = spreadsheet["spreadsheetId"]
-    
+
     google_drive_client: GoogleDriveClient = context["google_drive_client"]
     google_sheets_client: GoogleSheetsClient = context["google_sheets_client"]
-    
+
     response = _csv_import_state_response(context)
     if response.status_code != 200:
         return response
@@ -213,10 +212,10 @@ def csv_import(request):
         except (HttpError, ValueError, UnicodeDecodeError) as error:
             errors.append(
                 {
-                    "file": file["name"], 
+                    "file": file["name"],
                     "error": str(error),
                 },
-            ) 
+            )
 
     if errors:
         return JsonResponse(
@@ -238,13 +237,13 @@ def csv_import(request):
 
             # Refresh local spreadsheet dictionary
             spreadsheet = google_sheets_client.validate_spreadsheet(spreadsheet_id)
-            
+
             google_sheets_client.setup_sheet_headers_if_not_exists(
                 spreadsheet_id,
                 sheet_title,
                 google_sheets_client.HEADERS["employee_headers"],
             )
-            
+
             imported_rows += google_sheets_client.replace_employee_entries(
                 spreadsheet,
                 spreadsheet_id,
@@ -252,7 +251,7 @@ def csv_import(request):
                 file["entries"],
                 owner=request.user,
             )
-            
+
             imported_files.append(file)
     except HttpError as error:
         return JsonResponse(
@@ -312,7 +311,7 @@ def csv_import(request):
         },
         status=200,
     )
-    
+
 @login_required
 def connect(request):
     client_config = build_google_client_config(
@@ -341,7 +340,7 @@ def connect(request):
 def connect_callback(request):
     expected_state = request.session.pop("google_drive_state", None)
     returned_state = request.GET.get("state")
-    
+
     if (
         not expected_state
         or not returned_state
@@ -362,7 +361,7 @@ def connect_callback(request):
 
     if not (code_verifier := request.session.pop("google_drive_code_verifier", None)):
         return HttpResponseBadRequest(b"Missing OAuth code verifier.")
-    
+
     flow.code_verifier = code_verifier
 
     flow.fetch_token(authorization_response=request.build_absolute_uri())
@@ -377,7 +376,7 @@ def connect_callback(request):
         return HttpResponseBadRequest(error)
 
     subject = identity["sub"]
-    
+
     connection = GoogleConnection.objects.filter(
         user=request.user
     ).first()
@@ -404,7 +403,7 @@ def connect_callback(request):
         connection.encrypted_refresh_token = fernet.encrypt(
             flow.credentials.refresh_token.encode()
         ).decode()
-    
+
     connection.save(
         update_fields=[
             "granted_scopes",
@@ -454,21 +453,21 @@ def activate_configuration(request, configuration_id):
         pk=configuration_id,
         owner=request.user,
     ).first()
-    
+
     if configuration is None:
         return JsonResponse(
             {
                 "error": "Configuration not found."
-            }, 
+            },
             status=404
         )
 
     request.user.active_configuration = configuration
     request.user.save(update_fields=["active_configuration"])
-    
+
     return JsonResponse(
         {
-            "status": "active", 
+            "status": "active",
             "period": configuration.config_period_str
         }
     )
@@ -476,16 +475,16 @@ def activate_configuration(request, configuration_id):
 @login_required
 @require_http_methods(["POST", "PATCH"])
 def save_configuration(request, configuration_id=None):
-    
+
     try:
         payload = json.loads(request.body)
         root_folder_id = parse_resource_id(payload.get("root_folder_id", ""), "folder")
         spreadsheet_id = parse_resource_id(payload.get("spreadsheet_id", ""), "spreadsheet")
-        
+
         period_month = int(payload.get("period_month", ""))
         period_year = int(payload.get("period_year", ""))
         manager_recipients = payload.get("manager_recipients", [])
-        
+
         if not isinstance(manager_recipients, list):
             raise ValueError("Manager recipients must be a list of email addresses.")
         manager_recipients = list(dict.fromkeys(
@@ -517,7 +516,7 @@ def save_configuration(request, configuration_id=None):
             period_month=period_month,
             period_year=period_year,
         ).first()
-        
+
         if configuration is not None:
             return JsonResponse(
                 {
@@ -545,10 +544,10 @@ def save_configuration(request, configuration_id=None):
     connection = request.user.google_connection
     if not connection:
         return redirect("workspace:connect")
-    
+
     response = validate_folder_and_spreadsheet_ids(connection, root_folder_id, spreadsheet_id)
     response_data = json.loads(response.content)
-    
+
     if response.status_code != 200:
         return JsonResponse(
             {
@@ -559,17 +558,17 @@ def save_configuration(request, configuration_id=None):
 
     folder = response_data["folder"]
     spreadsheet = response_data["spreadsheet"]
-    
-    
+
+
     if configuration is None:
         configuration = WorkspaceConfiguration(owner=request.user)
-        
+
     configuration.root_folder_id = root_folder_id
     configuration.spreadsheet_id = spreadsheet_id
     configuration.period_month = period_month
     configuration.period_year = period_year
     configuration.manager_recipients = manager_recipients
-    
+
     try:
         with transaction.atomic():
             configuration.save()
@@ -582,7 +581,7 @@ def save_configuration(request, configuration_id=None):
             },
             status=409,
         )
-    
+
     return JsonResponse(
         {
             "status": "configured",
@@ -685,13 +684,13 @@ def sheets_preview_overview(request):
                 for row_index, row in enumerate(raw_rows)
                 if row and row[0]
             ]
-            
+
             employees[sheet_title.casefold()] = {
                 "name": sheet_title,
                 "sheetId": properties.get("sheetId"),
                 "rows": rows,
             }
-            
+
             sheet_records.append((employee, sheet_title, raw_rows))
     except ValueError as error:
         return JsonResponse({"error": str(error)}, status=400)
@@ -709,7 +708,7 @@ def sheets_preview_overview(request):
             year=configuration.period_year,
             month=configuration.period_month,
         ).first()
-        
+
         if month_record is None:
             continue
 
@@ -781,7 +780,7 @@ def sheets_preview_write(request):
     sheet_title = payload["employee_id"]
 
     google_sheets_client.parse_manual_entry(payload, spreadsheet_id, sheet_title)
-    
+
     return JsonResponse(
         {
             "status": "success",
@@ -826,7 +825,7 @@ def pdf_export(request):
             },
             status=200,
         )
-    
+
 
     return render(
         request,
@@ -892,7 +891,7 @@ def pdf_export_status(request):
         if employees:
             employee_delivery["status"] = "sent"
             employee_delivery["sent_count"] = len(managers)
-        
+
 
     german_month = export_state["german_month"]
     year = export_state["year"]
@@ -940,7 +939,7 @@ def pdf_export_status(request):
 @login_required
 @require_POST
 def pdf_export_generate(request):
-    
+
     connection: GoogleConnection = getattr(request.user, "google_connection", None)
     configuration: WorkspaceConfiguration = getattr(request.user, "owned_workspace", None)
     validation_response = validate_connection_and_configuration(connection, configuration)
@@ -959,7 +958,7 @@ def pdf_export_generate(request):
     summary_pdf_confirm_and_review_state = configuration.summary_pdf_confirm_and_review_state
     if summary_pdf_confirm_and_review_state:
         configuration._save_summary_pdf_confirm_and_review_state(default_summary_pdf_state())
-        
+
     try:
         google_drive_client, google_sheets_client, _, folder, spreadsheet = get_validated_workspace_resources(
             connection,
@@ -980,19 +979,19 @@ def pdf_export_generate(request):
         batch = render_export_batch(snapshot, export_state["german_month"])
 
         summary_file = google_drive_client.upload_or_replace_pdf(
-            export_state["month_export_folder"]["id"], 
-            batch["summary"]["filename"], 
+            export_state["month_export_folder"]["id"],
+            batch["summary"]["filename"],
             batch["summary"]["content"],
         )
-        
+
         employee_reports = []
         for report in batch["employees"]:
             uploaded = google_drive_client.upload_or_replace_pdf(
-                export_state["month_export_folder"]["id"], 
-                report["filename"], 
+                export_state["month_export_folder"]["id"],
+                report["filename"],
                 report["content"],
             )
-            
+
             employee_reports.append({
                 "employee": f"{report['employee'].first_name} {report['employee'].last_name}",
                 "pdf_url": f"https://drive.google.com/file/d/{uploaded['id']}/view",
@@ -1003,7 +1002,7 @@ def pdf_export_generate(request):
     except RefreshError:
         return JsonResponse(
             {
-                "error": "Your Google connection has expired or been revoked.", 
+                "error": "Your Google connection has expired or been revoked.",
                 "code": "google_reconnect_required"
             },
             status=401,
@@ -1033,17 +1032,17 @@ def pdf_export_generate(request):
 def _employee_delivery_reports(export_state, results):
     results_by_employee = {result["employee"]: result for result in results}
     employee_reports = []
-    
+
     for report in export_state["employee_export_files"]:
         delivery_result = results_by_employee.get(report["employee"])
         employee_report = {**report}
-        
+
         if delivery_result:
             employee_report["delivery_status"] = delivery_result["status"]
             employee_report["error"] = delivery_result.get("error")
-            
+
         employee_reports.append(employee_report)
-        
+
     return employee_reports
 
 
@@ -1053,31 +1052,31 @@ def _pdf_delivery_context(request):
     validation_response = validate_connection_and_configuration(connection, configuration)
     if validation_response is not None:
         return validation_response
-        
+
     if not request.session.get(f"pdf_export_confirmed:{configuration.pk}"):
         return JsonResponse(
             {
                 "error": "Review and confirm the summary PDF first."
             }, status=409
         )
-        
+
     drive_client, _, gmail_client, folder, _ = get_validated_workspace_resources(
-        connection, 
-        configuration.root_folder_id, 
+        connection,
+        configuration.root_folder_id,
         configuration.spreadsheet_id
     )
-    
+
     export_state = drive_client.prepare_pdf_export_folders(folder["id"], configuration)
     delivery_state = configuration.delivery_state or {}
     period_key = f"{configuration.period_year}-{configuration.period_month:02d}"
     period_state = delivery_state.setdefault(period_key, {"managers": [], "employees": []},)
-    
+
     return {
-        "configuration": configuration, 
-        "drive_client": drive_client, 
-        "gmail_client": gmail_client, 
-        "export_state": export_state, 
-        "period_state": period_state, 
+        "configuration": configuration,
+        "drive_client": drive_client,
+        "gmail_client": gmail_client,
+        "export_state": export_state,
+        "period_state": period_state,
         "delivery_state": delivery_state,
     }
 
@@ -1089,39 +1088,39 @@ def pdf_export_confirm(request):
         return JsonResponse(
             {
                 "error": "Workspace configuration is missing."
-            }, 
+            },
             status=400
         )
-        
+
     request.session[f"pdf_export_confirmed:{configuration.pk}"] = True
     state = configuration.summary_pdf_confirm_and_review_state
     state["confirmed"] = True
     state["reviewed"] = True
     configuration._save_summary_pdf_confirm_and_review_state(state)
-    
+
     return JsonResponse(
         {
-            "data": 
+            "data":
                 {
-                    "reviewed": True, 
+                    "reviewed": True,
                     "confirmed": True
                 }
-        }, 
+        },
         status=200
     )
 
 @login_required
 @require_POST
-def pdf_export_send_summary(request):    
+def pdf_export_send_summary(request):
     context = _pdf_delivery_context(request)
     if isinstance(context, JsonResponse):
         return context
 
-    configuration: WorkspaceConfiguration = context["configuration"] 
-    drive_client: GoogleDriveClient = context["drive_client"] 
-    gmail_client: GoogleGmailClient = context["gmail_client"] 
-    export_state = context["export_state"] 
-    period_state = context["period_state"] 
+    configuration: WorkspaceConfiguration = context["configuration"]
+    drive_client: GoogleDriveClient = context["drive_client"]
+    gmail_client: GoogleGmailClient = context["gmail_client"]
+    export_state = context["export_state"]
+    period_state = context["period_state"]
     delivery_state = context["delivery_state"]
 
     summary_file = export_state["summary_export_file"]
@@ -1130,62 +1129,62 @@ def pdf_export_send_summary(request):
         return JsonResponse({"error": "Generate the PDF reports before sending."}, status=409)
     if not recipients:
         return JsonResponse({"error": "No manager recipients are configured."}, status=400)
-        
+
     content = drive_client.download_file_content(summary_file["id"])
     results = []
     for recipient in recipients:
         if recipient in period_state["managers"]:
             results.append(
                 {
-                    "recipient": recipient, 
+                    "recipient": recipient,
                     "status": "sent"
                 })
             continue
-            
+
         try:
             sender_first_name = configuration.owner.first_name
             email_message = build_manager_email(
                 sender_first_name,
-                recipient, 
-                export_state["german_month"], 
-                export_state["year"], 
-                summary_file["name"], 
+                recipient,
+                export_state["german_month"],
+                export_state["year"],
+                summary_file["name"],
                 content,
             )
             gmail_client.send(email_message)
             period_state["managers"].append(recipient)
             results.append(
                 {
-                    "recipient": recipient, 
+                    "recipient": recipient,
                     "status": "sent"
                 }
             )
-            
+
         except HttpError as error:
             results.append(
                 {
-                    "recipient": recipient, 
-                    "status": "failed", 
+                    "recipient": recipient,
+                    "status": "failed",
                     "error": error.content,
                 }
             )
-            
+
     configuration._save_delivery_state(delivery_state)
     failed = [result for result in results if result["status"] == "failed"]
-    
+
     return JsonResponse(
         {
-            "data": 
+            "data":
                 {
-                    "summary_delivery": 
+                    "summary_delivery":
                         {
-                            "status": "failed" if failed else "sent", 
-                            "message": f"Sent to {len(results) - len(failed)} manager(s).", 
-                            "sent_count": len(results) - len(failed), 
+                            "status": "failed" if failed else "sent",
+                            "message": f"Sent to {len(results) - len(failed)} manager(s).",
+                            "sent_count": len(results) - len(failed),
                             "failed_count": len(failed),
                         }
                 }
-        }, 
+        },
         status=200
     )
 
@@ -1196,35 +1195,35 @@ def pdf_export_send_employees(request):
     context = _pdf_delivery_context(request)
     if isinstance(context, JsonResponse):
         return context
-        
-    configuration: WorkspaceConfiguration = context["configuration"] 
-    drive_client: GoogleDriveClient = context["drive_client"] 
-    gmail_client: GoogleGmailClient = context["gmail_client"] 
-    export_state = context["export_state"] 
-    period_state = context["period_state"] 
+
+    configuration: WorkspaceConfiguration = context["configuration"]
+    drive_client: GoogleDriveClient = context["drive_client"]
+    gmail_client: GoogleGmailClient = context["gmail_client"]
+    export_state = context["export_state"]
+    period_state = context["period_state"]
     delivery_state = context["delivery_state"]
-    
+
     results = []
     for report in export_state["employee_export_files"]:
         employee = Employee.objects.filter(
             owner=configuration.owner,
             first_name__iexact=report["employee"],
         ).first()
-        
+
         if employee is None or not employee.email:
             results.append(
                 {
-                    "employee": report["employee"], 
-                    "status": "failed", 
+                    "employee": report["employee"],
+                    "status": "failed",
                     "error": "Employee email is missing."
                 })
             continue
-            
+
         employee_key = int(employee.pk)
         if employee_key in period_state["employees"]:
             results.append(
                 {
-                    "employee": report["employee"], 
+                    "employee": report["employee"],
                     "status": "sent"
                 }
             )
@@ -1234,46 +1233,46 @@ def pdf_export_send_employees(request):
             sender_first_name = configuration.owner.first_name
             email_message = build_employee_email(
                 sender_first_name,
-                employee, 
-                export_state["german_month"], 
-                export_state["year"], 
-                report.get("name", f"Schicht_{employee.first_name}_{export_state['german_month']}_{export_state['year']}_EXPORT.pdf"), 
+                employee,
+                export_state["german_month"],
+                export_state["year"],
+                report.get("name", f"Schicht_{employee.first_name}_{export_state['german_month']}_{export_state['year']}_EXPORT.pdf"),
                 content
             )
             gmail_client.send(email_message)
-            
+
             period_state["employees"].append(employee_key)
             results.append(
                 {
-                    "employee": report["employee"], 
+                    "employee": report["employee"],
                     "status": "sent"
                 }
             )
-            
+
         except HttpError as error:
             results.append(
                 {
-                    "employee": report["employee"], 
-                    "status": "failed", 
+                    "employee": report["employee"],
+                    "status": "failed",
                     "error": error.content,
                 }
             )
-            
+
     configuration._save_delivery_state(delivery_state)
     failed = [result for result in results if result["status"] == "failed"]
     employee_reports = _employee_delivery_reports(export_state, results)
 
     return JsonResponse(
         {
-            "data": 
+            "data":
                 {
-                    "employee_delivery": 
+                    "employee_delivery":
                         {
-                            "status": "failed" if failed else "sent", "message": f"Sent to {len(results) - len(failed)} employee(s).", 
+                            "status": "failed" if failed else "sent", "message": f"Sent to {len(results) - len(failed)} employee(s).",
                             "sent_count": len(results) - len(failed), "failed_count": len(failed)
                         },
                     "employee_reports": employee_reports,
                 }
-        }, 
+        },
         status=200
     )

@@ -11,7 +11,7 @@ class WorkspaceAdmin(admin.ModelAdmin):
     )
 
     search_fields = ("owner__email", "owner__google_connection__subject", )
-    
+
     readonly_fields = (
         "owner",
         "root_folder_id",

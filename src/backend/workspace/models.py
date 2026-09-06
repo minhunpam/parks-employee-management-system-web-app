@@ -24,11 +24,11 @@ class WorkspaceConfiguration(models.Model):
     period_year = models.PositiveSmallIntegerField()
 
     manager_recipients = models.JSONField(default=list, blank=True)
-    
+
     delivery_state = models.JSONField(default=dict, blank=True)
 
     summary_pdf_confirm_and_review_state = models.JSONField(default=default_summary_pdf_state)
-    
+
     class Meta:
         constraints = [
             models.UniqueConstraint(
@@ -59,4 +59,4 @@ class WorkspaceConfiguration(models.Model):
         self.save(
             update_fields=["summary_pdf_confirm_and_review_state", "updated_at"]
         )
-        
+
