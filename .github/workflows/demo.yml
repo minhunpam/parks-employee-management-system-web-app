@@ -2,14 +2,14 @@ name: CI
 
 on:
   push:
-    branches: [ "dev" ]
+    branches: [ "staging" ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       
       - name: Run a one-line script
         run: echo Hello, world!
