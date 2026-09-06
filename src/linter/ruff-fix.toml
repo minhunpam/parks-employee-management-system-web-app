@@ -9,6 +9,7 @@ exclude = [
     ".ruff_cache",
 ]
 force-exclude = true
+line-length = 200
 
 [lint]
 

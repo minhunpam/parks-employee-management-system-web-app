@@ -258,10 +258,7 @@ class GoogleDriveClient:
         return folder
 
     def archive_file(self, file_id, file_name):
-        if file_name.lower().endswith(".csv"):
-            archived_name = f"{file_name[:-4]}[ARCHIVED].csv"
-        else:
-            archived_name = f"{file_name}[ARCHIVED]"
+        archived_name = f"{file_name[:-4]}[ARCHIVED].csv" if file_name.lower().endswith(".csv") else f"{file_name}[ARCHIVED]"
 
         return self.drive_service.files().update(
             fileId=file_id,

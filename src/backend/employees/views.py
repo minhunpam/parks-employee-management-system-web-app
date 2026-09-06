@@ -249,10 +249,7 @@ def employee_details(request, employee_id):
             employee.full_clean()
             employee.save()
         except (KeyError, TypeError, ValueError, InvalidOperation, ValidationError) as error:
-            if isinstance(error, ValidationError):
-                details = error.message_dict
-            else:
-                details = {"form": ["Please provide valid employee details."]}
+            details = error.message_dict if isinstance(error, ValidationError) else {"form": ["Please provide valid employee details."]}
 
             return JsonResponse({"error": details}, status=400)
 
