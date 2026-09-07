@@ -1,8 +1,5 @@
-@config "../../tailwind.config.js";
-
 @import "tailwindcss";
 
-@source "../../node_modules/flowbite";
 @source "../../templates/";
 
 @keyframes folder-attention {
@@ -28,5 +25,3 @@
         animation: none;
     }
 }
-
-@plugin "flowbite/plugin";
