@@ -19,8 +19,8 @@ jobs:
           PRODUCTION_KNOWN_HOSTS: ${{ secrets.PRODUCTION_KNOWN_HOSTS }}
         run: |
           install -m 700 -d "$HOME/.ssh"
-          printf '%s\n' "$PRODUCTION_SSH_KEY" > "$HOME/.ssh/parks-production"
-          printf '%s\n' "$PRODUCTION_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          echo "$PRODUCTION_SSH_KEY" > "$HOME/.ssh/parks-production"
+          echo "$PRODUCTION_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/parks-production" "$HOME/.ssh/known_hosts"
 
       - name: Deploy main to the production server
