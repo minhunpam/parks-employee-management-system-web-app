@@ -31,7 +31,7 @@ jobs:
           ssh -i "$HOME/.ssh/parks-production" \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
-            "$PRODUCTION_USER@$PRODUCTION_HOST" 'bash -se' <<'REMOTE'
+            "$PRODUCTION_USER@$PRODUCTION_HOST" 'bash -se' << 'REMOTE'
           set -Eeuo pipefail
 
           cd /opt/parks/app
@@ -39,7 +39,7 @@ jobs:
           git checkout main
           git pull --ff-only origin main
 
-          docker compose
+          docker compose \
             --env-file /etc/parks/production.env \
             -f src/compose.yaml \
             -f src/compose.prod.yaml \
