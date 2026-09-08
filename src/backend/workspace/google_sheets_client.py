@@ -1,5 +1,4 @@
 # Built-in modules
-import re
 from decimal import Decimal, InvalidOperation
 from typing import ClassVar
 from datetime import datetime
@@ -17,12 +16,12 @@ from employees.models import Employee, EmployeeMonth, EmployeeYear
 class GoogleSheetsClient:
     HEADERS: ClassVar[dict[str, list[str]]] = {
         "employee_headers": [
-            "Datum", "Dienstbegin", "Pausenbeginn", 
-            "Pausenende", "Dienstschluss", "Pause Min", 
+            "Datum", "Dienstbegin", "Pausenbeginn",
+            "Pausenende", "Dienstschluss", "Pause Min",
             "Arbeitszeit", "Typ", "Warnung"
         ],
     }
-    
+
     def __init__(self, sheets_service):
         self.sheets_service =  sheets_service
 
@@ -119,8 +118,7 @@ class GoogleSheetsClient:
 
     def read_sheet_values(self, spreadsheet_id, sheet_title):
         '''
-        Read sheet values of `sheet_title` from `spreadsheet_id` from cell A2 to column I (horizontally) 
-        and vertically until it hits blank line
+        Read sheet values of `sheet_title` from `spreadsheet_id` from cell A2 to column I (horizontally) and vertically until it hits blank line
 
         Returns:
             - list: list of data rows
@@ -139,8 +137,8 @@ class GoogleSheetsClient:
 
         parsed_date = datetime.strptime(payload["date"], "%d.%m.%Y").date()
         is_public_holiday = parsed_date in public_holidays(parsed_date.year)
-        
-        type_of_day = payload.get("type", "")    
+
+        type_of_day = payload.get("type", "")
         shift_start = payload.get("start", "")
         shift_end = payload.get("end", "")
 
@@ -148,8 +146,8 @@ class GoogleSheetsClient:
         pause_end = ""
         warnings = ["Manuell"]
         working_minutes = 0
-        pause_minutes = 0
-        
+        pause_minutes = 30
+
         if type_of_day == "Arbeit" and shift_start and shift_end:
             shift_start_minutes = time_to_minutes(shift_start)
             shift_end_minutes = time_to_minutes(shift_end)
@@ -160,21 +158,21 @@ class GoogleSheetsClient:
                 pause_start = minutes_to_time(pause_start_minutes)
                 pause_end = minutes_to_time(pause_end_minutes)
                 shift_end = minutes_to_time(shift_start_minutes + working_minutes + pause_minutes)
-                
+
             if is_public_holiday and working_minutes != 0:
                 working_minutes *= 2
                 warnings.append("Feiertag-Arbeit")
         elif type_of_day == "Frei":
             warnings.clear()
         else:
-            working_minutes = 8 * 60;
+            working_minutes = 8 * 60
 
         write_values = [
-            shift_start, 
-            pause_start, 
-            pause_end, 
-            shift_end, 
-            pause_minutes, 
+            shift_start,
+            pause_start,
+            pause_end,
+            shift_end,
+            pause_minutes,
             round(working_minutes / 60, 2),
             type_of_day,
             ", ".join(dict.fromkeys(warnings)),
@@ -184,7 +182,7 @@ class GoogleSheetsClient:
         if row_index is None:
             return JsonResponse({"error": "row_index is empty"}, status=400)
         row_number = row_index + 2
-        
+
         self.sheets_service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
             range=f"{sheet_title}!B{row_number}:I{row_number}",
@@ -237,7 +235,7 @@ class GoogleSheetsClient:
 
         return date_sort_value, time_sort_value
 
-    def replace_employee_entries(self, spreadsheet, spreadsheet_id, sheet_title, entries,):
+    def replace_employee_entries(self, spreadsheet, spreadsheet_id, sheet_title, entries, owner=None):
         existing_rows = self.read_sheet_values(spreadsheet_id, sheet_title,)
         affected_dates = set(entries.keys())
 
@@ -254,7 +252,7 @@ class GoogleSheetsClient:
             row_index for row_index, row in enumerate(rows, start=1)
             if datetime.strptime(row[0], "%d.%m.%Y").weekday() == calendar.SUNDAY
         ]
-        
+
         # Clear values only: formatting and columns after I remain untouched.
         self.sheets_service.spreadsheets().values().clear(
             spreadsheetId=spreadsheet_id,
@@ -271,12 +269,12 @@ class GoogleSheetsClient:
             ).execute()
 
         data_row_count = max(len(existing_rows), len(rows))
-        
+
         requests = []
         requests.extend(GoogleSheetsClient._create_week_borders(spreadsheet, sheet_title, sunday_row_indices, data_row_count,))
         requests.extend(GoogleSheetsClient._format_public_holiday_rows(spreadsheet, sheet_title, rows, data_row_count,))
         requests.extend(GoogleSheetsClient._protect_whole_sheet(spreadsheet, sheet_title))
-        
+
         if requests:
             self.sheets_service.spreadsheets().batchUpdate(
                 spreadsheetId=spreadsheet_id,
@@ -286,8 +284,8 @@ class GoogleSheetsClient:
             ).execute()
 
 
-        self._update_employee_summaries(sheet_title, rows)
-        
+        self._update_employee_summaries(sheet_title, rows, owner=owner)
+
         return len(imported_rows)
 
     @staticmethod
@@ -295,14 +293,18 @@ class GoogleSheetsClient:
         return " ".join(str(value or "").split()).casefold()
 
     @classmethod
-    def _find_employee_for_sheet(cls, sheet_title):
+    def _find_employee_for_sheet(cls, sheet_title, owner=None):
         '''
         Fetch the employee from `sheet_title`
         '''
 
         normalized_title = cls._normalize_employee_name(sheet_title)
+        employee_queryset = Employee.objects.all()
+        if owner is not None:
+            employee_queryset = employee_queryset.filter(owner=owner)
+
         employees = [
-            employee for employee in Employee.objects.all()
+            employee for employee in employee_queryset
             if normalized_title in {
                 cls._normalize_employee_name(employee.first_name),
                 cls._normalize_employee_name(f"{employee.first_name} {employee.last_name}"),
@@ -317,7 +319,7 @@ class GoogleSheetsClient:
             )
         if len(employees) > 1:
             raise ValueError(f"Spreadsheet sheet '{sheet_title}' matches multiple employees.")
-            
+
         return employees[0]
 
     @staticmethod
@@ -330,7 +332,7 @@ class GoogleSheetsClient:
     @classmethod
     def _summarize_rows(cls, rows):
         paid_absence_types = {"Urlaub", "Krankenstand", "Feiertag", "Feiertag bezahlt",}
-        
+
         worked_hours = Decimal("0.00")
         paid_absence_hours = Decimal("0.00")
         vacation_days_used = 0
@@ -338,18 +340,18 @@ class GoogleSheetsClient:
         for row in rows:
             if not row or not row[0]:
                 continue
-                
+
             hours = cls._decimal_cell_value(row, 6)
             entry_type = str(row[7] if len(row) > 7 else "").strip()
             entry_warnings = str(row[8] if len(row) > 8 else "").split(",")
-            
-            if entry_type in paid_absence_types and not "Feiertag-Arbeit" in entry_warnings:
+
+            if entry_type in paid_absence_types and "Feiertag-Arbeit" not in entry_warnings:
                 paid_absence_hours += hours
             else:
                 worked_hours += hours
-                
+
             if entry_type == "Urlaub":
-                vacation_days_used += 1 
+                vacation_days_used += 1
 
         return {
             "worked_hours": worked_hours,
@@ -358,10 +360,10 @@ class GoogleSheetsClient:
         }
 
     @classmethod
-    def _update_employee_summaries(cls, sheet_title, rows, year=None, month=None):
-        employee = cls._find_employee_for_sheet(sheet_title)
+    def _update_employee_summaries(cls, sheet_title, rows, year=None, month=None, owner=None):
+        employee = cls._find_employee_for_sheet(sheet_title, owner=owner)
         dated_rows = [
-            row 
+            row
             for row in rows if row and row[0]
         ]
 
@@ -374,12 +376,12 @@ class GoogleSheetsClient:
             target_year = year
         else:
             return
-        
+
         summary = cls._summarize_rows(rows)
-        
+
         with transaction.atomic():
             employee_year, _ = EmployeeYear.objects.get_or_create(employee=employee, year=target_year, )
-            
+
             nearest_previous_month = (
                 EmployeeMonth.objects.filter(employee=employee)
                 .filter(year__lt=target_year)
@@ -396,7 +398,7 @@ class GoogleSheetsClient:
                 .first()
             )
             nearest_previous_month = same_year_nearest_previous_month or nearest_previous_month
-            
+
             opening_hour_balance = (
                 nearest_previous_month.closing_hour_account_balance
                 if nearest_previous_month
@@ -433,7 +435,7 @@ class GoogleSheetsClient:
             hour_balance = updated_month.closing_hour_account_balance
             vacation_balance = updated_month.closing_vacation_balance
             nearest_previous_month = updated_month
-            
+
             for month_record in later_months:
                 month_record.opening_hour_account_balance = hour_balance
                 if month_record.year != nearest_previous_month.year:
@@ -479,7 +481,7 @@ class GoogleSheetsClient:
         """
             Highlight public-holiday rows with Google Sheets' light red 3.
         """
-        
+
         current_sheet = GoogleSheetsClient.get_sheet(spreadsheet, sheet_title)
         if not current_sheet or data_row_count <= 0:
             return []
@@ -498,7 +500,7 @@ class GoogleSheetsClient:
         }
         requests = [
             {
-                "repeatCell": { # Clearing the background color of all data rows 
+                "repeatCell": { # Clearing the background color of all data rows
                     "range": {
                         "sheetId": sheet_id,
                         "startRowIndex": 1,

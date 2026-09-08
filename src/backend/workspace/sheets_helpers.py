@@ -1,12 +1,12 @@
-         
+
 def _sheet_warnings(rows):
     warnings = {}
     total_warning_count = 0
     for row in rows:
         value = str(_cell(row, 8)).strip() if len(row) > 8 else ""
         for warning in value.split(","):
-            if warning.strip(): 
-                if not warning in warnings:
+            if warning.strip():
+                if warning not in warnings:
                     warnings[warning] = 1
                 else:
                     warnings[warning] += 1
@@ -14,7 +14,7 @@ def _sheet_warnings(rows):
                 total_warning_count += 1
 
     warning_list = [f"{warning}: x{warnings[warning]}" for warning in warnings]
-    
+
     return ", ".join(warning_list) or "—", total_warning_count
 
 def _handle_row(row: list[str], row_index=None):
@@ -30,15 +30,15 @@ def _handle_row(row: list[str], row_index=None):
         "pauseTime": f"{0 if pause == "—" else pause} min",
         "shiftTotalTime": _hours(_cell(row, 6)),
         "type": _cell(row, 7) or "—",
-        "warnings": warnings, 
+        "warnings": warnings,
     }
-    
+
 def _cell(row, index, default=""):
     return row[index] if index < len(row) and row[index] is not None else default
 
 def _hours(value):
     return f"{_number(value):.2f} h"
-    
+
 def _days(value):
     return f"{_number(value):.1f} d"
 

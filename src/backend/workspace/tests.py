@@ -5,6 +5,8 @@ from unittest.mock import Mock, patch
 # Django modules
 from django.conf import settings
 from django.test import SimpleTestCase, TestCase
+from django.db import IntegrityError, transaction
+from django.urls import reverse
 from decimal import Decimal
 
 # Local modules
@@ -13,6 +15,88 @@ from .google_oauth import build_services
 from .csv_parser import handle_entries, public_holidays
 from .google_sheets_client import GoogleSheetsClient
 from employees.models import Employee, EmployeeMonth, EmployeeYear
+from accounts.models import User
+from .models import WorkspaceConfiguration
+
+
+class WorkspaceConfigurationTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email="owner@example.com", password="password")
+        self.other_user = User.objects.create_user(email="other@example.com", password="password")
+
+    def configuration(self, **overrides):
+        values = {
+            "owner": self.user,
+            "root_folder_id": "folder-id",
+            "spreadsheet_id": "spreadsheet-id",
+            "period_month": 1,
+            "period_year": 2026,
+        }
+        values.update(overrides)
+        return WorkspaceConfiguration.objects.create(**values)
+
+    def test_user_can_have_multiple_period_configurations(self):
+        self.configuration()
+        february = self.configuration(
+            spreadsheet_id="february-sheet",
+            period_month=2,
+        )
+
+        self.assertEqual(self.user.workspace_configurations.count(), 2)
+        self.assertIsNone(self.user.active_configuration)
+
+        self.user.active_configuration = february
+        self.user.save(update_fields=["active_configuration"])
+        self.assertEqual(self.user.refresh_from_db(), None)
+        self.assertEqual(self.user.active_configuration, february)
+        self.assertEqual(self.user.owned_workspace, february)
+
+    def test_spreadsheet_is_unique_per_owner_but_can_be_reused_by_another_owner(self):
+        self.configuration()
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                self.configuration(period_month=2)
+
+        other_configuration = self.configuration(
+            owner=self.other_user,
+            period_month=2,
+        )
+        self.assertEqual(other_configuration.spreadsheet_id, "spreadsheet-id")
+
+    def test_period_is_unique_per_owner(self):
+        self.configuration()
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                self.configuration(spreadsheet_id="another-sheet")
+
+    def test_activate_configuration_requires_ownership(self):
+        configuration = self.configuration(owner=self.other_user)
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse("workspace:configuration-activate", args=[configuration.pk])
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertIsNone(self.user.active_configuration)
+
+    def test_create_endpoint_rejects_existing_period(self):
+        self.configuration()
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse("workspace:configuration-create"),
+            data={
+                "root_folder_id": "other-folder",
+                "spreadsheet_id": "other-sheet",
+                "period_month": 1,
+                "period_year": 2026,
+                "manager_recipients": [],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 409)
 
 class ParseResourceIdTests(SimpleTestCase):
        def test_plain_folder_id(self):
@@ -67,7 +151,7 @@ class CsvParserTests(SimpleTestCase):
         gross working time > 6 hours && pause time < 30 minutes ---> fulfill the condition for pause correction
         '''
 
-        
+
         result = handle_entries(
             {
                 "04.06.2026": [
@@ -297,6 +381,37 @@ class ManagerEmailTests(SimpleTestCase):
         self.assertEqual(results, [{"recipient": "manager@example.com", "status": "sent"}])
         gmail_client.send.assert_not_called()
 
+    def test_employee_delivery_response_contains_updated_report_statuses(self):
+        from .views import _employee_delivery_reports
+
+        export_state = {
+            "employee_export_files": [
+                {
+                    "employee": "Ademir",
+                    "file_id": "file-1",
+                    "delivery_status": "not_sent",
+                    "error": None,
+                },
+                {
+                    "employee": "Lena",
+                    "file_id": "file-2",
+                    "delivery_status": "not_sent",
+                    "error": None,
+                },
+            ]
+        }
+        results = [
+            {"employee": "Ademir", "status": "sent"},
+            {"employee": "Lena", "status": "failed", "error": "Email is unavailable."},
+        ]
+
+        reports = _employee_delivery_reports(export_state, results)
+
+        self.assertEqual(reports[0]["delivery_status"], "sent")
+        self.assertIsNone(reports[0]["error"])
+        self.assertEqual(reports[1]["delivery_status"], "failed")
+        self.assertEqual(reports[1]["error"], "Email is unavailable.")
+
     def test_builds_employee_email_with_personal_pdf_and_message(self):
         from .email_delivery import build_employee_email
 
@@ -351,7 +466,7 @@ class BuildGoogleResourcesTests(SimpleTestCase):
 
         self.assertEqual(result, (drive_service, sheets_service, gmail_service))
 
-        
+
         fernet_class.assert_called_once_with(settings.FERNET_KEY)
         fernet.decrypt.assert_called_once_with(b"encrypted-token")
 
@@ -416,4 +531,3 @@ class BuildGoogleResourcesTests(SimpleTestCase):
         )
         gmail_service.users.return_value.getProfile.assert_called_once_with(userId="me")
         gmail_service.users.return_value.getProfile.return_value.execute.assert_called_once_with()
-        

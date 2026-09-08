@@ -31,7 +31,7 @@ def employee_dashboard_data(request):
     month = request.GET.get("month", "")
     sort = request.GET.get("sort", "default")
     direction = "-" if request.GET.get("direction") == "desc" else ""
-    
+
     try:
         page = max(int(request.GET.get("page", 1)), 1)
         page_size = min(max(int(request.GET.get("page_size", 25)), 1), 100)
@@ -39,7 +39,7 @@ def employee_dashboard_data(request):
         return JsonResponse({"error": "Invalid pagination values."}, status=400)
 
     if tab == "employees":
-        queryset = Employee.objects.all()
+        queryset = Employee.objects.filter(owner=request.user)
         if search:
             queryset = queryset.filter(
                 models.Q(first_name__icontains=search)
@@ -48,20 +48,20 @@ def employee_dashboard_data(request):
             )
         if status:
             queryset = queryset.filter(working_status=status)
-            
+
         total = queryset.count()
         active = queryset.filter(working_status=Employee.WorkingStatus.ACTIVE).count()
         archived = queryset.filter(working_status=Employee.WorkingStatus.ARCHIVED).count()
         employee_sort_fields = {
-            "first_name": "first_name", 
-            "last_name": "last_name", 
-            "email": "email", 
-            "working_status": "working_status", 
+            "first_name": "first_name",
+            "last_name": "last_name",
+            "email": "email",
+            "working_status": "working_status",
             "employment_start_date": "employment_start_date"
         }
         ordering = direction + employee_sort_fields.get(sort, "last_name")
         rows = list(queryset.order_by(ordering, "first_name")[((page - 1) * page_size):(page * page_size)])
-        
+
         return JsonResponse({
             "tab": tab,
             "rows": [{
@@ -80,7 +80,7 @@ def employee_dashboard_data(request):
         })
 
     if tab == "monthly":
-        queryset = EmployeeMonth.objects.select_related("employee").all()
+        queryset = EmployeeMonth.objects.select_related("employee").filter(employee__owner=request.user)
         if search:
             queryset = queryset.filter(
                 models.Q(employee__first_name__icontains=search)
@@ -91,21 +91,21 @@ def employee_dashboard_data(request):
             queryset = queryset.filter(year=year)
         if month:
             queryset = queryset.filter(month=month)
-            
+
         total = queryset.count()
         summary_queryset = queryset
         monthly_sort_fields = {
-            "employee": "employee__last_name", 
-            "year": "year", 
-            "month": "month", 
-            "opening_hour_account_balance": "opening_hour_account_balance", 
-            "closing_hour_account_balance": "closing_hour_account_balance", 
-            "opening_vacation_balance": "opening_vacation_balance", 
+            "employee": "employee__last_name",
+            "year": "year",
+            "month": "month",
+            "opening_hour_account_balance": "opening_hour_account_balance",
+            "closing_hour_account_balance": "closing_hour_account_balance",
+            "opening_vacation_balance": "opening_vacation_balance",
             "closing_vacation_balance": "closing_vacation_balance"
         }
         ordering = direction + monthly_sort_fields.get(sort, "year")
         rows = list(queryset.order_by(ordering, "-month", "employee__last_name")[((page - 1) * page_size):(page * page_size)])
-        
+
         return JsonResponse({
             "tab": tab,
             "rows": [{
@@ -129,7 +129,7 @@ def employee_dashboard_data(request):
         })
 
     if tab == "yearly":
-        queryset = EmployeeYear.objects.select_related("employee").all()
+        queryset = EmployeeYear.objects.select_related("employee").filter(employee__owner=request.user)
         if search:
             queryset = queryset.filter(
                 models.Q(employee__first_name__icontains=search)
@@ -138,18 +138,18 @@ def employee_dashboard_data(request):
             )
         if year:
             queryset = queryset.filter(year=year)
-            
+
         total = queryset.count()
         yearly_sort_fields = {
-            "employee": "employee__last_name", 
-            "year": "year", 
-            "annual_allowed_vacation_days": "annual_allowed_vacation_days", 
-            "carried_over_vacation_days": "carried_over_vacation_days", 
+            "employee": "employee__last_name",
+            "year": "year",
+            "annual_allowed_vacation_days": "annual_allowed_vacation_days",
+            "carried_over_vacation_days": "carried_over_vacation_days",
             "vacation_balance": "vacation_balance"
         }
         ordering = direction + yearly_sort_fields.get(sort, "year")
         rows = list(queryset.order_by(ordering, "employee__last_name")[((page - 1) * page_size):(page * page_size)])
-        
+
         return JsonResponse({
             "tab": tab,
             "rows": [{
@@ -183,8 +183,9 @@ def register(request):
 
     try:
         payload = json.loads(request.body)
-    
+
         registered_employee = Employee(
+            owner=request.user,
             first_name=payload["first_name"],
             last_name=payload["last_name"],
             email=payload["email"],
@@ -197,19 +198,19 @@ def register(request):
         registered_employee.full_clean()
     except (ValidationError) as error:
         return JsonResponse({"error": error.message_dict}, status=400)
-        
+
     registered_employee.save()
 
     registered_employee_month = EmployeeMonth(
         employee=registered_employee,
     )
     registered_employee_month.save()
-    
+
     registered_employee_year = EmployeeYear(
         employee=registered_employee,
     )
     registered_employee_year.save()
-    
+
 
     return JsonResponse(
         {
@@ -221,7 +222,7 @@ def register(request):
 @login_required
 @require_http_methods(["GET", "PATCH"])
 def employee_details(request, employee_id):
-    employee = get_object_or_404(Employee, pk=employee_id)
+    employee = get_object_or_404(Employee, pk=employee_id, owner=request.user)
 
     if request.method == "PATCH":
         try:
@@ -248,11 +249,8 @@ def employee_details(request, employee_id):
             employee.full_clean()
             employee.save()
         except (KeyError, TypeError, ValueError, InvalidOperation, ValidationError) as error:
-            if isinstance(error, ValidationError):
-                details = error.message_dict
-            else:
-                details = {"form": ["Please provide valid employee details."]}
-                
+            details = error.message_dict if isinstance(error, ValidationError) else {"form": ["Please provide valid employee details."]}
+
             return JsonResponse({"error": details}, status=400)
 
         message = (
@@ -260,7 +258,7 @@ def employee_details(request, employee_id):
             if payload.get("action") == "archive"
             else "Employee details updated successfully."
         )
-        
+
         return JsonResponse({"message": message})
 
     return render(

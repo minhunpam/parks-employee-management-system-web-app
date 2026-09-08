@@ -110,7 +110,14 @@ importCsvButton_Import.addEventListener("click", async () => {
     importCsvStatus.textContent = result.error || "Please reconnect Google.";
     reconnectGoogle.href = connectUrl;
     reconnectGoogle.hidden = false;
-    return;
+  }
+  else if (result.status === "awaiting_upload") {
+    importCsvStatus.textContent = result.message;
+    setRootFolderAttention(true);
+  }
+  else if (result.status === "spreadsheet_update_failed") {
+    importCsvStatus.textContent = result.message;
+    importCsvStatus.textContent += " One possible reason for this is you have already written to the spreadsheet and now the sheets inside the spreadsheet is protected. So you need to manually delete those sheets and re-import CSV files."
   }
 
   if (result.errors) {

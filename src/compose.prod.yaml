@@ -1,0 +1,16 @@
+services:
+  web:
+    env_file:
+      - /etc/parks/production.env
+    restart: unless-stopped
+
+  db:
+    restart: unless-stopped
+
+  nginx:
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    restart: unless-stopped

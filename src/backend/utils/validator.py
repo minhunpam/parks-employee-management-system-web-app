@@ -14,7 +14,7 @@ from workspace.google_sheets_client import GoogleSheetsClient
 from workspace.google_gmail_client import GoogleGmailClient
 
 def validate_connection_and_configuration(
-    connection: GoogleConnection, 
+    connection: GoogleConnection,
     configuration: WorkspaceConfiguration
 ):
     '''
@@ -29,7 +29,7 @@ def validate_connection_and_configuration(
         HttpResponse: If the connection or configuration is invalid, redirects to the appropriate setup page.
     '''
     if (
-        not connection 
+        not connection
         or not connection.encrypted_refresh_token
         or not connection.granted_scopes
     ):
@@ -48,7 +48,7 @@ def validate_connection_and_configuration(
         return redirect("workspace:setup")
 
     return None
-    
+
 def get_validated_workspace_resources(
     connection: GoogleConnection,
     root_folder_id: str,
@@ -58,10 +58,10 @@ def get_validated_workspace_resources(
     google_drive_client = GoogleDriveClient(drive_service)
     google_sheets_client = GoogleSheetsClient(sheets_service)
     google_gmail_client = GoogleGmailClient(gmail_service)
-    
+
     folder = google_drive_client.validate_drive_resources(root_folder_id, spreadsheet_id,)
     spreadsheet = google_sheets_client.validate_spreadsheet(spreadsheet_id)
-    
+
     return google_drive_client, google_sheets_client, google_gmail_client, folder, spreadsheet
 
 def validate_folder_and_spreadsheet_ids(

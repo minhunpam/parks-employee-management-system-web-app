@@ -8,12 +8,11 @@ class GoogleGmailClient:
 
     def send(self, message: EmailMessage):
         raw = base64.urlsafe_b64encode(message.as_bytes()).decode("ascii")
-        
+
         return self.gmail_service.users().messages().send(
-            userId="me", 
+            userId="me",
             body={
                 "raw": raw
             }
         ).execute()
-    
-    
+

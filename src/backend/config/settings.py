@@ -12,9 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 import os
-from django.conf import STATICFILES_STORAGE_ALIAS
 from dotenv import load_dotenv
-from django.utils import timezone
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -29,12 +27,28 @@ SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
 
+# Keep one settings module for every environment. Production enables the
+# security controls below through DJANGO_DEBUG=False, while local development
+# remains usable over HTTP.
+SECURE_SSL_REDIRECT = not DEBUG
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG
+
 ALLOWED_HOSTS = [
     host.strip()
     for host in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",")
     if host.strip()
 ]
 
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",")
+    if origin.strip()
+]
 
 # Application definition
 
@@ -86,12 +100,24 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+if os.getenv("DB_ENGINE", "sqlite") == "postgres":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.environ["POSTGRES_DB"],
+            "USER": os.environ["POSTGRES_USER"],
+            "PASSWORD": os.environ["POSTGRES_PASSWORD"],
+            "HOST": os.getenv("POSTGRES_HOST", "localhost"),
+            "PORT": os.getenv("POSTGRES_PORT", "5432"),
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
 
 # Password validation
@@ -129,6 +155,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [
     BASE_DIR.parent / "frontend" / "static",
 ]
@@ -157,10 +184,10 @@ DRIVE_SCOPES = [
     *GOOGLE_OAUTH_SCOPES,
     "https://www.googleapis.com/auth/drive",
     "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/gmail.send", 
+    "https://www.googleapis.com/auth/gmail.send",
 ]
 
-# This is used by the @login_required decorator 
+# This is used by the @login_required decorator
 # to redirect users to the login page if they are not authenticated
 LOGIN_URL = "accounts:google-login"
 
@@ -168,7 +195,7 @@ FERNET_KEY = os.environ["FERNET_KEY"]
 
 
 if __name__ == "__main__":
-    # print(f"Base Directory: {BASE_DIR.parent.parent}")
-    # print(f"DIRS: {TEMPLATES[0].get("DIRS")[0]}")
-    # print(f"STATICFILES_DIRS: {STATICFILES_DIRS[0]}")
-    pass
+    print(f"Base Directory: {BASE_DIR.parent.parent}")
+    print(f"DIRS: {TEMPLATES[0].get("DIRS")[0]}")
+    print(f"STATICFILES_DIRS: {STATICFILES_DIRS[0]}")
+    print(f"STATIC_ROOT: {STATIC_ROOT}")

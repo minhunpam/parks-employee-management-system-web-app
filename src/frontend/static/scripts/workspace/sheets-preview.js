@@ -165,7 +165,7 @@ async function loadData({ refresh = false } = {}) {
       setLoadedData(payload.data || payload, Boolean(payload.external_change));
     }
     else {
-      syncStatus.textContent += `\n${payload.error}`;
+      syncStatus.textContent = `${payload.error}`;
     }
   } catch (error) {
     console.log("Something wrong happened!");

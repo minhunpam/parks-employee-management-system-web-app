@@ -310,8 +310,12 @@ async function sendReports(url, statusElement, message) {
       method: "POST",
       body: JSON.stringify({})
     });
-    
-    renderBatch({ ...state.batch, ...data, confirmed: true });
+
+    renderBatch({
+      ...state.batch,
+      ...data,
+      confirmed: true
+    });
     statusElement.textContent = data.message || "Delivery completed";
     setNotice();
   } catch (error) {

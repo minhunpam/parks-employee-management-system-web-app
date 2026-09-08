@@ -12,13 +12,28 @@ class User(AbstractUser):
 
     objects = UserManager()
 
-    # A string describing the name of the field on the user model 
+    # A string describing the name of the field on the user model
     # that is used as the unique identifier
     USERNAME_FIELD = "email"
 
     # A list of field names that are prompted when creating a user
     # via `createsuperuser` management command
     REQUIRED_FIELDS = []
+
+    active_configuration = models.ForeignKey(
+        "workspace.WorkspaceConfiguration",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="active_for_users",
+    )
+
+    @property
+    def owned_workspace(self):
+        configuration = self.active_configuration
+        if configuration and configuration.owner_id == self.pk:
+            return configuration
+        return self.workspace_configurations.order_by("period_year", "period_month").first()
 
 class GoogleConnection(models.Model):
     user = models.OneToOneField(
