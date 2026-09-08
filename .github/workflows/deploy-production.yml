@@ -10,7 +10,7 @@ jobs:
   deploy:
     name: Deploy to production
     runs-on: ubuntu-latest
-    environment: production
+    environment: parks-production
 
     steps:
       - name: Configure SSH
@@ -28,8 +28,7 @@ jobs:
           PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
           PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
         run: |
-          ssh \
-            -i "$HOME/.ssh/parks-production" \
+          ssh -i "$HOME/.ssh/parks-production" \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
             "$PRODUCTION_USER@$PRODUCTION_HOST" 'bash -se' <<'REMOTE'
