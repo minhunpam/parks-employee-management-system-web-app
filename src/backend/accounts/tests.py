@@ -1,8 +1,24 @@
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .models import User
 from .views import PENDING_APPROVAL_USER_SESSION_KEY
+
+
+class NotFoundPageTests(TestCase):
+    @override_settings(DEBUG=False)
+    def test_unknown_url_renders_branded_page_with_404_status(self):
+        response = self.client.get("/this-page-does-not-exist/")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertContains(response, "Page not found", status_code=404)
+        self.assertContains(
+            response,
+            "The page you’re looking for doesn’t exist or may have moved.",
+            status_code=404,
+        )
+        self.assertContains(response, 'href="/"', count=2, status_code=404)
+        self.assertContains(response, "Go back", status_code=404)
 
 
 class GoogleLogoutViewTests(TestCase):

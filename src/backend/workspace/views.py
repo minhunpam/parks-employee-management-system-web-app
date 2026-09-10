@@ -342,6 +342,7 @@ def connect(request):
     return redirect(authorization_url)
 
 def connect_callback(request):
+    # print(request.user.email)
     expected_state = request.session.pop("google_drive_state", None)
     returned_state = request.GET.get("state")
 
