@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Signing in · PARKS</title>
+</head>
+<body>
+    <p>Sign-in complete. This window will close.</p>
+    <script>
+        // alert("this script runs");
+        const destination = "{{ destination|escapejs }}";
+        const broadcastChannel = new BroadcastChannel("google-oauth");
+        broadcastChannel.postMessage(
+          { 
+            type: "google-oauth-complete", 
+            destination 
+          }
+        )
+        window.close();
+    </script>
+</body>
+</html>

@@ -6,6 +6,7 @@ from django.conf import settings
 from django.contrib.auth import login, logout
 from django.http import HttpResponseBadRequest
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 # Google modules
@@ -20,6 +21,18 @@ from .models import GoogleConnection, User
 
 
 PENDING_APPROVAL_USER_SESSION_KEY = "pending_approval_user_id"
+GOOGLE_OAUTH_POPUP_SESSION_KEY = "google_oauth_popup"
+
+
+def _google_oauth_popup_response(request, destination):
+    print("this runs")
+    return render(
+        request,
+        "accounts/google-oauth-popup-complete.html",
+        {
+            "destination": destination
+        },
+    )
 
 
 def home(request):
@@ -52,6 +65,7 @@ def google_login(request):
         prompt="select_account",
     )
 
+    request.session[GOOGLE_OAUTH_POPUP_SESSION_KEY] = request.GET.get("popup") == "1"
     request.session["google_oauth_state"] = state
     request.session["google_oauth_code_verifier"] = flow.code_verifier
     
@@ -137,13 +151,27 @@ def google_callback(request):
             subject=subject,
         )
 
+    is_popup = request.session.pop(GOOGLE_OAUTH_POPUP_SESSION_KEY, False)
     if not user.is_active:
         # Keep the user associated with the approval page without authenticating
         # them. The page uses this ID to detect activation on refresh.
         request.session[PENDING_APPROVAL_USER_SESSION_KEY] = user.pk
+        if is_popup:
+            return _google_oauth_popup_response(
+                request,
+                reverse("accounts:approval-pending"),
+            )
+            
         return redirect("accounts:approval-pending")
 
     login(request, user)
+
+    if is_popup:
+        print("this run")
+        return _google_oauth_popup_response(
+            request,
+            reverse("workspace:entry"),
+        )
 
     return redirect("workspace:entry")
 

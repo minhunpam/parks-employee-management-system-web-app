@@ -21,6 +21,34 @@ class NotFoundPageTests(TestCase):
         self.assertContains(response, "Go back", status_code=404)
 
 
+class GoogleLoginPopupTests(TestCase):
+    def test_home_loads_google_login_popup_script(self):
+        response = self.client.get(reverse("home"))
+
+        self.assertContains(
+            response,
+            "scripts/accounts/google-login.js",
+        )
+
+    def test_approval_page_loads_google_login_popup_script(self):
+        user = User.objects.create_user(
+            email="pending-popup@example.com",
+            password="password",
+            is_active=False,
+        )
+        session = self.client.session
+        session[PENDING_APPROVAL_USER_SESSION_KEY] = user.pk
+        session.save()
+
+        response = self.client.get(reverse("accounts:approval-pending"))
+
+        self.assertContains(
+            response,
+            "scripts/accounts/google-login.js",
+            status_code=403,
+        )
+
+
 class GoogleLogoutViewTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
