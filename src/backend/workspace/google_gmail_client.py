@@ -15,4 +15,3 @@ class GoogleGmailClient:
                 "raw": raw
             }
         ).execute()
-

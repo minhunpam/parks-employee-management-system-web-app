@@ -29,7 +29,7 @@ function cancelSignInFlow() {
 
   // This is not guaranteed to work consistenly acress browsers <--- A thing to notice
   signInPopup?.close();
-  
+
   signInPopup = undefined;
   loginLinks.forEach((link) => {
     link.dataset.signInPending = "false";

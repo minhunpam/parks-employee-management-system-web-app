@@ -19,11 +19,11 @@
                 <a href="{% url 'employees:employee-dashboard' %}" class="text-sm font-bold text-white transition hover:text-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black">
                     Employee dashboard
                 </a>
-                
+
                 <a href="{% url 'workspace:sheets-preview' %}" class="text-sm font-bold text-white transition hover:text-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black">
                     Sheets Preview
                 </a>
-                
+
                 <a href="{%url 'workspace:pdf-export'%}" class="text-sm font-bold text-white transition hover:text-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 focus:ring-offset-black">
                     PDF export
                 </a>
@@ -64,7 +64,7 @@
                 data-csv-import-url-check="{% url 'workspace:csv-import-check' %}"
                 data-csv-import-url-import="{% url 'workspace:csv-import' %}"
                 data-connect-url="{% url 'workspace:connect' %}">
-                    
+
                 <article class="relative border border-[#cccccc] p-6 sm:p-8">
                     <span class="absolute -left-px -top-px h-3 w-3 bg-[#76b900]" aria-hidden="true"></span>
                     <div class="flex flex-col gap-5 border-b border-[#cccccc] pb-6 sm:flex-row sm:items-start sm:justify-between">
@@ -81,7 +81,7 @@
                             Check for CSV files
                             <!--<span class="ml-3" aria-hidden="true">→</span>-->
                         </button>
-                        
+
                         <button id="import-csv-button-import" type="button" hidden class="inline-flex min-h-11 items-center justify-center enabled:border-2 enabled:border-[#76b900] px-5 py-3 text-base font-bold text-black transition enabled:hover:bg-[#76b900] focus:outline-none focus:ring-2 focus:ring-[#76b900] focus:ring-offset-2 disabled:bg-[#5a8d00] disabled:border-[#5a8d00] disabled:cursor-not-allowed">
                             Import files
                             <!--<span class="ml-3" aria-hidden="true">→</span>-->
@@ -101,13 +101,13 @@
                             Add CSV files to Import.
                         </p>
                     </div>
-                    
+
                     <div class="border-t-10 border-[#cccccc] pt-4">
                         <p class="text-xs font-bold uppercase tracking-wide text-[#757575]">02</p>
                         <p class="mt-2 font-bold">Process</p>
                         <p class="mt-1 text-sm text-[#757575]">Run the import check and action.</p>
                     </div>
-                    
+
                     <div class="border-t-10 border-[#cccccc] pt-4">
                         <p class="text-xs font-bold uppercase tracking-wide text-[#757575]">03</p>
                         <p class="mt-2 font-bold">Review</p>
@@ -127,14 +127,14 @@
 
                             {% if configuration.root_folder_id %}
                             <a class="mt-2 inline-block text-sm text-[#0046a4] underline" id="root-folder-link"
-                                href="https://drive.google.com/drive/folders/{{ configuration.root_folder_id }}" 
+                                href="https://drive.google.com/drive/folders/{{ configuration.root_folder_id }}"
                                 target="_blank" rel="noopener">
                                     Open in Drive
                                     <!--<span aria-hidden="true">↗</span>-->
                                 </a>
                             {% endif %}
                         </div>
-                        
+
                         <div class="py-4">
                             <dt class="text-xs font-bold uppercase tracking-wide text-[#757575]">Main spreadsheet</dt>
                             <dd class="mt-2 break-all text-sm font-bold">{{ configuration.spreadsheet_id|default:"Not configured" }}</dd>
@@ -181,12 +181,12 @@
                         <p class="text-sm font-bold uppercase tracking-wide text-[#76b900]">Manager note</p>
                         <h2 id="notes-heading" class="mt-3 text-2xl font-bold">A predictable monthly handoff.</h2>
                     </div>
-                    
+
                     <div class="border-l-2 border-[#cccccc] px-5">
                         <p class="font-bold">Before checking</p>
                         <p class="mt-2 text-sm leading-6 text-[#757575]">Make sure the latest CSV files are in the configured Import folder.</p>
                     </div>
-                    
+
                     <div class="border-l-2 border-[#cccccc] px-5">
                         <p class="font-bold">After importing</p>
                         <p class="mt-2 text-sm leading-6 text-[#757575]">Review the generated spreadsheet and report data before exporting PDFs.</p>

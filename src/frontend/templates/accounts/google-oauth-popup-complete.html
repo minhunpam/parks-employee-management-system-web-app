@@ -10,9 +10,9 @@
         const destination = "{{ destination|escapejs }}";
         const broadcastChannel = new BroadcastChannel("google-oauth");
         broadcastChannel.postMessage(
-          { 
-            type: "google-oauth-complete", 
-            destination 
+          {
+            type: "google-oauth-complete",
+            destination
           }
         )
         window.close();

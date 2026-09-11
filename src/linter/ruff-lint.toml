@@ -11,8 +11,8 @@ force-exclude = true
 line-length = 200
 
 [lint]
-select = [ 
-    # pycodestyle 
+select = [
+    # pycodestyle
     "E",
    # Pyflakes
    "F",
@@ -29,7 +29,7 @@ select = [
 ignore = [
     'D100', 'D101', 'D102', 'D103', 'D107',
     'D202', 'D203', 'D204', 'D205', 'D208', 'D212', 'D214', 'D215',
-    'D400', 'D401', 'D404', 'D413', 'D415', 'D417', 
+    'D400', 'D401', 'D404', 'D413', 'D415', 'D417',
     'I001',
     'SIM117'
 ]

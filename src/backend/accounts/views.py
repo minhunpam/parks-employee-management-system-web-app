@@ -68,7 +68,7 @@ def google_login(request):
     request.session[GOOGLE_OAUTH_POPUP_SESSION_KEY] = request.GET.get("popup") == "1"
     request.session["google_oauth_state"] = state
     request.session["google_oauth_code_verifier"] = flow.code_verifier
-    
+
     return redirect(authorization_url)
 
 def google_callback(request):
@@ -77,21 +77,21 @@ def google_callback(request):
 
     if not expected_state:
         return redirect("accounts:home")
-    
+
     if (
         not returned_state
         or not secrets.compare_digest(expected_state, returned_state)
     ):
         request.session.pop("google_oauth_state", None)
         request.session.pop("google_oauth_code_verifier", None)
-        
+
         return HttpResponseBadRequest(b"Invalid OAuth state.")
 
     request.session.pop("google_oauth_state", None)
-    
+
     if not (code_verifier := request.session.pop("google_oauth_code_verifier", None)):
         return HttpResponseBadRequest(b"Missing OAuth code verifier.")
-        
+
     if error := request.GET.get("error"):
         return HttpResponseBadRequest(f"Google authentication failed: {error}")
 
@@ -161,7 +161,7 @@ def google_callback(request):
                 request,
                 reverse("accounts:approval-pending"),
             )
-            
+
         return redirect("accounts:approval-pending")
 
     login(request, user)
@@ -206,4 +206,3 @@ def approval_pending(request):
 def google_logout(request):
     logout(request)
     return redirect("home")
-

@@ -19,7 +19,7 @@ export function getDaysInMonth(year, month) {
     month = 1;
     year++;
   }
-  
+
   const lastDay = new Date(year, month, 0);
   return lastDay.getDate();
 }

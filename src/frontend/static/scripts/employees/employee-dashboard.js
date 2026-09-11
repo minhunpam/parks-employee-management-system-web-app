@@ -58,13 +58,13 @@ const tableDefinitions = {
 
 function loadYears() {
   const current_year = new Date().getFullYear();
-  
+
   for (let value = current_year; value >= current_year - 5; --value) {
     yearDropDown.insertAdjacentHTML(
       "beforeend",
       `<option value="${value}">${value}</option>`);
   }
-  
+
   for (let value = 1; value <= 12; ++value) {
     monthDropDown.insertAdjacentHTML(
       "beforeend",
@@ -91,7 +91,7 @@ function renderSummaryCards(summary) {
           </span>
 
           <p class="pt-2 text-3xl font-bold">${htmlInjectionProtection(summary[key])}</p>
-          
+
           <p class="mt-2 text-sm text-[#757575]">${label}</p>
         </article>
       `
@@ -100,7 +100,7 @@ function renderSummaryCards(summary) {
 
 function renderTable(data) {
   const definition = tableDefinitions[state.tab];
-  
+
   const isEmployeesTab = state.tab === "employees";
   const hasEmployeeFilters = searchField.value || statusDropDown.value;
   const hasRows = data.rows.length > 0;
@@ -131,11 +131,11 @@ function renderTable(data) {
       ${definition.headers.map(renderHeader).join("")}
     </tr>
   `;
-  
+
   const renderCell = (row, field) => {
-    if (isEmployeesTab && field === "first_name") { 
+    if (isEmployeesTab && field === "first_name") {
       const employeeId = row.id;
-      
+
       return `
         <td class="px-5 py-4">
           <a
@@ -145,7 +145,7 @@ function renderTable(data) {
           </a>
         </td>`;
     }
-    
+
     return `<td class="px-5 py-4">${htmlInjectionProtection(row[field])}</td>`;
   };
 
@@ -196,16 +196,16 @@ async function loadData() {
       direction: state.direction
     }
   );
-  
+
   tableStatus.textContent = "Loading records…";
   try {
     const response = await fetch(`${apiUrl}?${params}`);
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.error || "Unable to load records.");
     }
-    
+
     renderSummaryCards(data.summary);
     renderTable(data);
   } catch (error) {
@@ -253,7 +253,7 @@ document.querySelector("#next-page").addEventListener("click", () => {
 tableHead.addEventListener("click", (event) => {
   const button = event.target.closest(".sort-button");
   if (!button) return;
-  
+
   if (state.sort === button.dataset.sort) {
     state.direction = state.direction === "asc" ? "desc" : "asc";
   }

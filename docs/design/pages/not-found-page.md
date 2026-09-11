@@ -37,7 +37,7 @@ The page provides two recovery actions:
 - **Primary:** return to the home page
 - **Secondary:** go back to the previous browser location
 
-The browser-back action should use the user's history when a useful previous location exists. If there is no suitable history entry, it should fall back to the home page. 
+The browser-back action should use the user's history when a useful previous location exists. If there is no suitable history entry, it should fall back to the home page.
 - The home destination remains appropriate for both authenticated and unauthenticated users because the application handles their next destination.
   - A small reminder/ recall for this:
     - For authenticated users, the browser will direct them to:

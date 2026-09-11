@@ -55,13 +55,13 @@ restoreDraft();
 newConfigurationButton?.addEventListener("click", () => {
   editingConfigurationId = null;
   form.reset();
-  
+
   rootFolderInput.value = "";
   spreadsheetInput.value = "";
   periodMonthInput.value = "";
   periodYearInput.value = "";
   managerRecipientsInput.value = "";
-  
+
   setupStatus.textContent = "Enter the resources for the new period.";
   rootFolderInput.focus();
 });
@@ -87,7 +87,7 @@ activeConfigurationInput?.addEventListener("change", async () => {
 
 function showWorkspaceConfirmation(confirmationPhrase) {
   return new Promise((resolve) => {
-    
+
     confirmationMessage.textContent = "Type ";
     const code = document.createElement("code");
     code.classList.add(
@@ -99,7 +99,7 @@ function showWorkspaceConfirmation(confirmationPhrase) {
       "font-bold",
       "text-[#1a1a1a]",
     );
-    
+
     code.textContent = confirmationPhrase;
     confirmationMessage.append(code, " to confirm this change.");
 
@@ -109,7 +109,7 @@ function showWorkspaceConfirmation(confirmationPhrase) {
     const handleClose = () => {
       confirmationDialog.removeEventListener("close", handleClose);
       document.body.classList.remove("overflow-hidden");
-      
+
       resolve(
           confirmationDialog.returnValue === "confirm"
               ? confirmationInput.value
@@ -181,12 +181,12 @@ form.addEventListener("submit", async (event) => {
           payload.confirmation = confirmation;
           result = await saveSetup(payload);
       }
-      
+
       if (result.result.code === "google_reconnect_required" || result.original_response.status === 401) {
           setupStatus.textContent = result.result.error || "Please reconnect Google.";
-  
+
           saveDraft();
-          
+
           reconnectGoogle.href = connectUrl;
           reconnectGoogle.hidden = false;
           return;

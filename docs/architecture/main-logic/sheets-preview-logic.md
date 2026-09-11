@@ -111,7 +111,7 @@ The existing Employee Dashboard remains the database-backed reporting view. The 
   - Prevent normal direct editing of employee sheet cells in Google Sheets.
   - Allow PARKS to update the protected sheet through its authenticated Google API identity.
   - Include a description such as:
-  
+
   ```text
   Managed by PARKS. Use the application to add or correct entries.
   ```

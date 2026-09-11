@@ -59,4 +59,3 @@ class WorkspaceConfiguration(models.Model):
         self.save(
             update_fields=["summary_pdf_confirm_and_review_state", "updated_at"]
         )
-

@@ -99,7 +99,7 @@ def _validate_csv_import_context(request):
         return JsonResponse(
             {
                 "error": str(error),
-            }, 
+            },
             status=502)
 
     return {
@@ -492,7 +492,7 @@ def save_configuration(request, configuration_id=None):
 
         if not isinstance(manager_recipients, list):
             raise TypeError("Manager recipients must be a list of email addresses.")
-            
+
         manager_recipients = list(dict.fromkeys(
             email.strip() for email in manager_recipients if email.strip()
         ))
@@ -510,15 +510,15 @@ def save_configuration(request, configuration_id=None):
         return JsonResponse(
             {
                 "error": "The import month must be between 1 and 12."
-            }, 
+            },
             status=400
         )
-        
+
     if not 2000 <= period_year <= 2099:
         return JsonResponse(
             {
                 "error": "The import year must be between 2000 and 2099."
-            }, 
+            },
             status=400)
 
     if configuration_id is not None:

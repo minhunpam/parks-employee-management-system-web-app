@@ -53,12 +53,12 @@ function setNotice(title, message, { reconnect = false, error = false } = {})
   exportNotice.hidden = !title && !message;
   exportNoticeTitle.textContent = title || "";
   exportNoticeMessage.textContent = message || "";
-  
+
   exportNotice.classList.toggle("border-[#df6500]", !error);
   exportNotice.classList.toggle("bg-[#feeeb2]", !error);
   exportNotice.classList.toggle("border-[#e52020]", error);
   exportNotice.classList.toggle("bg-[#ffe5e5]", error);
-  
+
   reconnectGoogle.hidden = !reconnect;
   reconnectGoogle.href = urls.reconnect || "#";
 }
@@ -155,7 +155,7 @@ function renderBatch(data) {
 
     summaryReviewCheckbox.disabled = state.confirmed;
     summaryReviewCheckbox.checked = state.confirmed;
-    
+
   } else {
     summaryEmpty.hidden = false;
     summaryReviewContainer.hidden = true;
@@ -170,13 +170,13 @@ function renderBatch(data) {
   if (summaryDelivery.status === "sent") {
     summaryDeliveryStatus.textContent = "Delivery finished"
   }
-  
+
   const employeeDelivery = data.employee_delivery || {};
   employeeDeliveryStatus.textContent = state.confirmed ? "Ready to send employee PDFs." : "Review and confirm the summary first.";
   if (employeeDelivery.status === "sent") {
     employeeDeliveryStatus.textContent = "Delivery finished"
   }
-  
+
   setButtons();
 }
 
@@ -204,7 +204,7 @@ function renderEmployeeReports(reports = []) {
         `
         : "—";
       const details = report.error || report.delivery_error || "—";
-      
+
       return `
       <tr class="border-b border-[#cccccc] last:border-0 hover:bg-[#f7f7f7]">
         <th scope="row" class="px-4 py-4 font-bold">
@@ -281,13 +281,13 @@ async function generateReports() {
 async function confirmReview() {
   confirmButton.disabled = true;
   reviewStatus.textContent = "Saving confirmation…";
-  
+
   try {
     const data = await requestJson(urls.confirm, {
       method: "POST",
       body: JSON.stringify({ reviewed: true })
     });
-    
+
     state.confirmed = true;
     renderBatch({ ...state.batch, ...data, confirmed: true, reviewed: true });
     setNotice();
@@ -302,7 +302,7 @@ async function confirmReview() {
 async function sendReports(url, statusElement, message) {
   state.isSending = true;
   setButtons();
-  
+
   statusElement.textContent = `${message}...`;
 
   try {
