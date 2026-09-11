@@ -7,7 +7,6 @@
 <body>
     <p>Sign-in complete. This window will close.</p>
     <script>
-        // alert("this script runs");
         const destination = "{{ destination|escapejs }}";
         const broadcastChannel = new BroadcastChannel("google-oauth");
         broadcastChannel.postMessage(

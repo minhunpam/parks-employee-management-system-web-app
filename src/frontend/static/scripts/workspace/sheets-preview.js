@@ -168,8 +168,6 @@ async function loadData({ refresh = false } = {}) {
       syncStatus.textContent = `${payload.error}`;
     }
   } catch (error) {
-    console.log("Something wrong happened!");
-    console.log(error);
     tableStatus.textContent = "Unable to load spreadsheet data.";
   } finally {
     document.querySelector("#refresh-preview-button").disabled = false;

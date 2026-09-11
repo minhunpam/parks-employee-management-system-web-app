@@ -54,7 +54,7 @@ describe("Google sign-in loading state", () => {
   });
 
   test("allows the user to cancel sign-in", () => {
-    const popup = { closed: false, focus: jest.fn(), close: jest.fn() };
+    const popup = { closed: true, focus: jest.fn(), close: jest.fn() };
     jest.spyOn(window, "open").mockReturnValue(popup);
 
     document.querySelector("a").click();
