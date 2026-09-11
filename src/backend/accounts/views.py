@@ -24,8 +24,10 @@ PENDING_APPROVAL_USER_SESSION_KEY = "pending_approval_user_id"
 
 def home(request):
     if request.user.is_authenticated:
-        return redirect("workspace:entry")
+        if request.user.is_active:
+            return redirect("workspace:entry")
 
+        return redirect("accounts:approval_pending")
 
     return render(request, "accounts/home.html")
 
@@ -52,21 +54,30 @@ def google_login(request):
 
     request.session["google_oauth_state"] = state
     request.session["google_oauth_code_verifier"] = flow.code_verifier
-
+    
     return redirect(authorization_url)
 
 def google_callback(request):
-
-    expected_state = request.session.pop("google_oauth_state", None)
+    expected_state = request.session.get("google_oauth_state")
     returned_state = request.GET.get("state")
 
+    if not expected_state:
+        return redirect("accounts:home")
+    
     if (
-        not expected_state
-        or not returned_state
+        not returned_state
         or not secrets.compare_digest(expected_state, returned_state)
     ):
+        request.session.pop("google_oauth_state", None)
+        request.session.pop("google_oauth_code_verifier", None)
+        
         return HttpResponseBadRequest(b"Invalid OAuth state.")
 
+    request.session.pop("google_oauth_state", None)
+    
+    if not (code_verifier := request.session.pop("google_oauth_code_verifier", None)):
+        return HttpResponseBadRequest(b"Missing OAuth code verifier.")
+        
     if error := request.GET.get("error"):
         return HttpResponseBadRequest(f"Google authentication failed: {error}")
 
@@ -80,9 +91,6 @@ def google_callback(request):
         state=expected_state,
     )
     flow.redirect_uri = settings.GOOGLE_OAUTH_REDIRECT_URI
-
-    if not (code_verifier := request.session.pop("google_oauth_code_verifier",None)):
-        return HttpResponseBadRequest(b"Missing OAuth code verifier.")
 
     flow.code_verifier = code_verifier
 
@@ -101,7 +109,7 @@ def google_callback(request):
         return HttpResponseBadRequest(error)
 
     if identity.get("email_verified") is not True:
-        return HttpResponseBadRequest("Google email is not verified.")
+        return HttpResponseBadRequest(b"Google email is not verified.")
 
     subject = identity["sub"]
     email = identity["email"]
@@ -162,7 +170,7 @@ def approval_pending(request):
 
     return render(
         request,
-        "accounts/approval_pending.html",
+        "accounts/approval-pending.html",
         status=403
     )
 

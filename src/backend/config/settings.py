@@ -30,13 +30,14 @@ DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
 # Keep one settings module for every environment. Production enables the
 # security controls below through DJANGO_DEBUG=False, while local development
 # remains usable over HTTP.
-SECURE_SSL_REDIRECT = not DEBUG
-SESSION_COOKIE_SECURE = not DEBUG
-CSRF_COOKIE_SECURE = not DEBUG
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
-SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
-SECURE_HSTS_PRELOAD = not DEBUG
+FORCE_HTTPS = os.getenv("DJANGO_FORCE_HTTPS", str(not DEBUG)).lower() == "true"
+
+SECURE_SSL_REDIRECT = FORCE_HTTPS
+SESSION_COOKIE_SECURE = FORCE_HTTPS
+CSRF_COOKIE_SECURE = FORCE_HTTPS
+SECURE_HSTS_SECONDS = 31536000 if FORCE_HTTPS else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = FORCE_HTTPS
+SECURE_HSTS_PRELOAD = FORCE_HTTPS
 
 ALLOWED_HOSTS = [
     host.strip()
