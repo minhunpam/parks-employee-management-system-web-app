@@ -40,7 +40,7 @@ The check endpoint should:
 2. Validate that the configured root folder and spreadsheet still exist and are editable.
 3. Create `Import` if it does not exist.
 4. Create the previous-month folder if it does not exist.
-5. Ignore archived files. 
+5. Ignore archived files.
 6. Validate the remaining CSV filenames.
 7. Return one of these states:
    - `awaiting_upload` — no active CSV files exist.
@@ -126,7 +126,7 @@ csv_raw_data/Schicht_Ademir_Juni_2026.csv
 ## CSV Content Parsing
 - Check if the parsed filename matches completely with the expected format.
 - Decode the CSV content using encoding: `windows-1252`.
-- Add all the **date key** into the entry. 
+- Add all the **date key** into the entry.
   - Example: June has 30 days, so the date keys will be `01.06.2026`, `02.06.2026`, ..., `30.06.2026`.
   - Reason: I want to maintain a consistent format among the employees. Because if taken from the CSV files, there are days one working, but other doesn't work. So on the day someone doesn't is left blank
 - Normalize the data read from the CSV file.
@@ -153,10 +153,10 @@ csv_raw_data/Schicht_Ademir_Juni_2026.csv
 - For every file in the parsed files:
   - Create sheet if not exists
   - Set up sheet headers for each shet if not exists
-    - Headers: 
+    - Headers:
     ```
-    "Datum", "Dienstbegin", "Pausenbeginn", 
-    "Pausenende", "Dienstschluss", "Pause Min", 
+    "Datum", "Dienstbegin", "Pausenbeginn",
+    "Pausenende", "Dienstschluss", "Pause Min",
     "Arbeitszeit", "Typ", "Warnung"
     ```
   - Sheet row replacement:
@@ -186,7 +186,7 @@ csv_raw_data/Schicht_Ademir_Juni_2026.csv
             "remark": "<remark>"
         },
         ...
-    ], 
+    ],
     ...
 }
 ```
@@ -194,7 +194,7 @@ csv_raw_data/Schicht_Ademir_Juni_2026.csv
 - After the handling, the `entries` dictionary should have the following form:
 ```
 {
-    "<working_date>": 
+    "<working_date>":
         {
             "shift_start": "<shift_start_time>",
             "pause_start": "<pause_start_time>",
@@ -205,7 +205,7 @@ csv_raw_data/Schicht_Ademir_Juni_2026.csv
             "type of day": "<type_of_day>",
             "warnings": "<warnings>",
         },
-    "<working_date>": 
+    "<working_date>":
         {
             "shift_start": "<shift_start_time>",
             "pause_start": "<pause_start_time>",
@@ -230,9 +230,9 @@ csv_raw_data/Schicht_Ademir_Juni_2026.csv
   - Pause minutes = Sum of all pause gaps
   - Working time = Shift gross minutes - Pause minutes
 
-### Things to consider with the pause gaps 
+### Things to consider with the pause gaps
   - **"ÜBERLAPPUNG" (Overlapping): two CSV intervals occur at the same time**
-    - Example:     
+    - Example:
       ```text
         08:00–12:00
         11:30–15:00
@@ -257,7 +257,7 @@ csv_raw_data/Schicht_Ademir_Juni_2026.csv
       - Pause minutes < 30 minutes
       - OR The interval between the shift start and the following pause start > 6 hours
   - Recalculate:
-    - pause start = shift start + 6 hours 
+    - pause start = shift start + 6 hours
     - pause end = pause start + 30 minutes
     - shift end = shift start + working time + pause time
   - Warning: `"P6"`

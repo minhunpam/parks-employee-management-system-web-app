@@ -6,6 +6,7 @@ from django.conf import settings
 from django.contrib.auth import login, logout
 from django.http import HttpResponseBadRequest
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 # Google modules
@@ -20,12 +21,26 @@ from .models import GoogleConnection, User
 
 
 PENDING_APPROVAL_USER_SESSION_KEY = "pending_approval_user_id"
+GOOGLE_OAUTH_POPUP_SESSION_KEY = "google_oauth_popup"
+
+
+def _google_oauth_popup_response(request, destination):
+    print("this runs")
+    return render(
+        request,
+        "accounts/google-oauth-popup-complete.html",
+        {
+            "destination": destination
+        },
+    )
 
 
 def home(request):
     if request.user.is_authenticated:
-        return redirect("workspace:entry")
+        if request.user.is_active:
+            return redirect("workspace:entry")
 
+        return redirect("accounts:approval_pending")
 
     return render(request, "accounts/home.html")
 
@@ -50,22 +65,32 @@ def google_login(request):
         prompt="select_account",
     )
 
+    request.session[GOOGLE_OAUTH_POPUP_SESSION_KEY] = request.GET.get("popup") == "1"
     request.session["google_oauth_state"] = state
     request.session["google_oauth_code_verifier"] = flow.code_verifier
 
     return redirect(authorization_url)
 
 def google_callback(request):
-
-    expected_state = request.session.pop("google_oauth_state", None)
+    expected_state = request.session.get("google_oauth_state")
     returned_state = request.GET.get("state")
 
+    if not expected_state:
+        return redirect("accounts:home")
+
     if (
-        not expected_state
-        or not returned_state
+        not returned_state
         or not secrets.compare_digest(expected_state, returned_state)
     ):
+        request.session.pop("google_oauth_state", None)
+        request.session.pop("google_oauth_code_verifier", None)
+
         return HttpResponseBadRequest(b"Invalid OAuth state.")
+
+    request.session.pop("google_oauth_state", None)
+
+    if not (code_verifier := request.session.pop("google_oauth_code_verifier", None)):
+        return HttpResponseBadRequest(b"Missing OAuth code verifier.")
 
     if error := request.GET.get("error"):
         return HttpResponseBadRequest(f"Google authentication failed: {error}")
@@ -80,9 +105,6 @@ def google_callback(request):
         state=expected_state,
     )
     flow.redirect_uri = settings.GOOGLE_OAUTH_REDIRECT_URI
-
-    if not (code_verifier := request.session.pop("google_oauth_code_verifier",None)):
-        return HttpResponseBadRequest(b"Missing OAuth code verifier.")
 
     flow.code_verifier = code_verifier
 
@@ -101,7 +123,7 @@ def google_callback(request):
         return HttpResponseBadRequest(error)
 
     if identity.get("email_verified") is not True:
-        return HttpResponseBadRequest("Google email is not verified.")
+        return HttpResponseBadRequest(b"Google email is not verified.")
 
     subject = identity["sub"]
     email = identity["email"]
@@ -129,13 +151,27 @@ def google_callback(request):
             subject=subject,
         )
 
+    is_popup = request.session.pop(GOOGLE_OAUTH_POPUP_SESSION_KEY, False)
     if not user.is_active:
         # Keep the user associated with the approval page without authenticating
         # them. The page uses this ID to detect activation on refresh.
         request.session[PENDING_APPROVAL_USER_SESSION_KEY] = user.pk
+        if is_popup:
+            return _google_oauth_popup_response(
+                request,
+                reverse("accounts:approval-pending"),
+            )
+
         return redirect("accounts:approval-pending")
 
     login(request, user)
+
+    if is_popup:
+        print("this run")
+        return _google_oauth_popup_response(
+            request,
+            reverse("workspace:entry"),
+        )
 
     return redirect("workspace:entry")
 
@@ -162,7 +198,7 @@ def approval_pending(request):
 
     return render(
         request,
-        "accounts/approval_pending.html",
+        "accounts/approval-pending.html",
         status=403
     )
 
@@ -170,4 +206,3 @@ def approval_pending(request):
 def google_logout(request):
     logout(request)
     return redirect("home")
-

@@ -96,7 +96,11 @@ def _validate_csv_import_context(request):
     except ValueError as error:
         return JsonResponse({"error": str(error)}, status=400)
     except HttpError as error:
-        return JsonResponse({"error": str(error)}, status=502)
+        return JsonResponse(
+            {
+                "error": str(error),
+            },
+            status=502)
 
     return {
         "folder": folder,
@@ -338,6 +342,7 @@ def connect(request):
     return redirect(authorization_url)
 
 def connect_callback(request):
+    # print(request.user.email)
     expected_state = request.session.pop("google_drive_state", None)
     returned_state = request.GET.get("state")
 
@@ -486,7 +491,8 @@ def save_configuration(request, configuration_id=None):
         manager_recipients = payload.get("manager_recipients", [])
 
         if not isinstance(manager_recipients, list):
-            raise ValueError("Manager recipients must be a list of email addresses.")
+            raise TypeError("Manager recipients must be a list of email addresses.")
+
         manager_recipients = list(dict.fromkeys(
             email.strip() for email in manager_recipients if email.strip()
         ))
@@ -494,14 +500,26 @@ def save_configuration(request, configuration_id=None):
             validate_email(email)
     except (ValueError, TypeError, json.JSONDecodeError, ValidationError) as error:
         return JsonResponse(
-            {"error": str(error)},
+            {
+                "error": str(error)
+            },
             status=400
         )
 
     if not 1 <= period_month <= 12:
-        return JsonResponse({"error": "The import month must be between 1 and 12."}, status=400)
+        return JsonResponse(
+            {
+                "error": "The import month must be between 1 and 12."
+            },
+            status=400
+        )
+
     if not 2000 <= period_year <= 2099:
-        return JsonResponse({"error": "The import year must be between 2000 and 2099."}, status=400)
+        return JsonResponse(
+            {
+                "error": "The import year must be between 2000 and 2099."
+            },
+            status=400)
 
     if configuration_id is not None:
         configuration = WorkspaceConfiguration.objects.filter(

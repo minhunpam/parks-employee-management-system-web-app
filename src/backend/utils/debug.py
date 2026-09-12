@@ -17,4 +17,3 @@ class Debugger:
             IsSuperuser: {user.is_superuser}
             ==================================
         """)
-

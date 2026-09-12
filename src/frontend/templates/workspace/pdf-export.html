@@ -45,7 +45,7 @@
         data-send-employees-url="{{ pdf_export_send_employees_url|default:'' }}"
         data-reconnect-url="{% url 'workspace:connect' %}"
         data-setup-url="{% url 'workspace:setup' %}"
-    >        
+    >
         <section class="bg-black text-white" aria-labelledby="export-heading">
             <div class="mx-auto flex max-w-7xl flex-col gap-8 px-6 py-14 lg:flex-row lg:items-end lg:justify-between lg:px-8 lg:py-16">
                 <div>
@@ -153,7 +153,7 @@
                     <h4 class="text-xl font-bold">No employee reports generated</h4>
                     <p class="mt-2 text-sm text-[#757575]">Employee report statuses will appear here after generation.</p>
                 </div>
-                
+
                 <div id="employee-report-list" hidden class="mt-6 overflow-x-auto border border-[#cccccc]">
                     <table class="w-full min-w-[760px] border-collapse text-left text-sm">
                         <caption class="sr-only">Employee PDF generation and delivery status</caption>
@@ -180,7 +180,7 @@
                             <!--<span class="ml-3" aria-hidden="true">→</span>-->
                         </button>
                     </article>
-                    
+
                     <article class="border border-[#cccccc] p-6">
                         <p class="text-sm font-bold uppercase tracking-wide text-[#76b900]">Step 03B</p>
                         <h4 class="mt-2 text-xl font-bold">Send employee PDFs</h4>

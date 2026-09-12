@@ -23,7 +23,7 @@ employmentStartDate.addEventListener("change", () => {
   }
   else if (
     employmentEndDate.value
-    && new Date(employmentEndDate.value) === new Date(employmentStartDate.value)) 
+    && new Date(employmentEndDate.value) === new Date(employmentStartDate.value))
   {
     employmentStartDate.setCustomValidity("Start date cannot be the same as end date");
     employmentStartDate.value = "";
@@ -43,7 +43,7 @@ employmentEndDate.addEventListener("change", () => {
   }
   else if (
     employmentStartDate.value
-    && new Date(employmentEndDate.value) === new Date(employmentStartDate.value)) 
+    && new Date(employmentEndDate.value) === new Date(employmentStartDate.value))
   {
     employmentEndDate.setCustomValidity("Start date cannot be the same as end date");
     employmentEndDate.value = "";
@@ -51,7 +51,7 @@ employmentEndDate.addEventListener("change", () => {
   else {
     employmentEndDate.setCustomValidity("");
   }
-  
+
   employmentEndDate.reportValidity();
 });
 
@@ -80,21 +80,21 @@ form.addEventListener("submit", async (event) => {
 
   const payload = Object.fromEntries(new FormData(form));
   let result;
-  
+
   try {
     result = await registerEmployee(payload);
     if (result.original_response.status === 200) {
       employeeRegistrationStatus.textContent = result.result.message;
       form.reset();
     }
-    
+
     const errorObj = result.result.error;
 
     if (errorObj && errorObj.email) {
       email.setCustomValidity(errorObj.email.join(" "));
       email.reportValidity();
     }
-    
+
   } catch (error) {
     employeeRegistrationStatus.textContent = "Something wrong happened and the developer has caught this!";
   }

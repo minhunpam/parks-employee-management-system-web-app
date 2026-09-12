@@ -1,12 +1,14 @@
 # Built-in modules
 import io
 import re
+import time
 from typing import ClassVar
 
 # Django modules
 from django.core.exceptions import ObjectDoesNotExist
 
 # Google modules
+from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 
 # Local modules
@@ -14,6 +16,8 @@ from .models import WorkspaceConfiguration
 from employees.models import Employee
 
 class GoogleDriveClient:
+    RESOURCE_LOOKUP_ATTEMPTS: ClassVar[int] = 3
+    RESOURCE_LOOKUP_RETRY_DELAY_SECONDS: ClassVar[int] = 1
     IMPORT_FOLDER_NAME: ClassVar[str] = "Import"
     EXPORT_FOLDER_NAME: ClassVar[str] = "Export"
     IMPORT_CSV_FILENAME_REGEX_PATTERN: ClassVar[re.Pattern] = re.compile(
@@ -233,26 +237,46 @@ class GoogleDriveClient:
 
         return content
 
-    def validate_drive_resources(self, folder_id, spreadsheet_id):
-        folder = self.drive_service.files().get(
-            fileId=folder_id,
-            fields="id,name,mimeType,capabilities(canEdit)",
-            supportsAllDrives=False,
-        ).execute()
+    def _get_resource_metadata(self, file_id, fields):
+        for attempt in range(self.RESOURCE_LOOKUP_ATTEMPTS):
+            try:
+                return self.drive_service.files().get(
+                    fileId=file_id,
+                    fields=fields,
+                    supportsAllDrives=False,
+                ).execute()
+            except HttpError as error:
+                if error.resp.status != 404:
+                    raise
+                if attempt == self.RESOURCE_LOOKUP_ATTEMPTS - 1:
+                    raise ValueError(
+                        "Google could not find this resource. It may still be "
+                        "synchronizing; wait a few seconds and try again, or "
+                        "check that the connected Google account has access. "
+                        "Hint: try to interact with the google spreadsheet and "
+                        "check in folder if the spreadsheet has actually appeared."
+                    ) from error
+                time.sleep(self.RESOURCE_LOOKUP_RETRY_DELAY_SECONDS)
 
-        if folder.get("mimeType") != "application/vnd.google-apps.folder":
+    def validate_drive_resources(self, folder_id, spreadsheet_id):
+        folder = self._get_resource_metadata(
+            folder_id,
+            "id,name,mimeType,capabilities(canEdit)",
+        )
+
+        if folder and folder.get("mimeType") != "application/vnd.google-apps.folder":
             raise ValueError("The Drive resource is not a folder.")
-        if not folder.get("capabilities", {}).get("canEdit"):
+        if folder and not folder.get("capabilities", {}).get("canEdit"):
             raise PermissionError("You need write access to the Drive root folder.")
 
-        spreadsheet_file = self.drive_service.files().get(
-            fileId=spreadsheet_id,
-            fields="id,mimeType,capabilities(canEdit)",
-            supportsAllDrives=False,
-        ).execute()
-        if spreadsheet_file.get("mimeType") != "application/vnd.google-apps.spreadsheet":
+        spreadsheet_file = self._get_resource_metadata(
+            spreadsheet_id,
+            "id,mimeType,capabilities(canEdit)",
+        )
+
+        if spreadsheet_file and spreadsheet_file.get("mimeType") != "application/vnd.google-apps.spreadsheet":
             raise ValueError("The Google resource is not a spreadsheet.")
-        if not spreadsheet_file.get("capabilities", {}).get("canEdit"):
+        if spreadsheet_file and not spreadsheet_file.get("capabilities", {}).get("canEdit"):
             raise PermissionError("You need write access to the main spreadsheet.")
 
         return folder

@@ -14,6 +14,8 @@ from .google_resources import parse_resource_id
 from .google_oauth import build_services
 from .csv_parser import handle_entries, public_holidays
 from .google_sheets_client import GoogleSheetsClient
+from .google_drive_client import GoogleDriveClient
+from googleapiclient.errors import HttpError
 from employees.models import Employee, EmployeeMonth, EmployeeYear
 from accounts.models import User
 from .models import WorkspaceConfiguration
@@ -97,6 +99,44 @@ class WorkspaceConfigurationTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 409)
+
+class GoogleDriveResourceValidationTests(SimpleTestCase):
+    def http_404(self):
+        response = SimpleNamespace(status=404, reason="Not Found")
+        return HttpError(response, b"File not found")
+
+    def test_retries_transient_spreadsheet_not_found(self):
+        drive_service = Mock()
+        request = Mock()
+        request.execute.side_effect = [
+            {"id": "folder-id", "mimeType": "application/vnd.google-apps.folder", "capabilities": {"canEdit": True}},
+            self.http_404(),
+            self.http_404(),
+            {"id": "sheet-id", "mimeType": "application/vnd.google-apps.spreadsheet", "capabilities": {"canEdit": True}},
+        ]
+        drive_service.files.return_value.get.return_value = request
+
+        with patch("workspace.google_drive_client.time.sleep") as sleep:
+            folder = GoogleDriveClient(drive_service).validate_drive_resources(
+                "folder-id", "sheet-id"
+            )
+
+        self.assertEqual(folder["id"], "folder-id")
+        self.assertEqual(sleep.call_count, 2)
+        self.assertEqual(request.execute.call_count, 4)
+
+    def test_reports_not_found_after_retries(self):
+        drive_service = Mock()
+        request = Mock()
+        request.execute.side_effect = [self.http_404()] * 3
+        drive_service.files.return_value.get.return_value = request
+
+        with patch("workspace.google_drive_client.time.sleep"):
+            with self.assertRaisesRegex(ValueError, "synchronizing"):
+                GoogleDriveClient(drive_service).validate_drive_resources(
+                    "folder-id", "sheet-id"
+                )
+
 
 class ParseResourceIdTests(SimpleTestCase):
        def test_plain_folder_id(self):

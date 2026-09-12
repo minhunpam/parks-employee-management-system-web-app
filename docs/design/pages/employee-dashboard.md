@@ -6,7 +6,7 @@
   - `Employee` — employee master data
   - `EmployeeMonth` — monthly working-hour and vacation summaries
   - `EmployeeYear` — yearly vacation summaries
-  
+
 > Google Sheets remains relevant to daily shift details and CSV import, but the spreadsheet preview and manual-entry workflow are intentionally deferred. They are not part of this dashboard design yet.
 
 ## Page structure

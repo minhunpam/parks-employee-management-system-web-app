@@ -90,12 +90,12 @@ archiveButton.addEventListener("click", async () => {
   }
 });
 
-document.querySelectorAll(".form-field").forEach((field) => { 
+document.querySelectorAll(".form-field").forEach((field) => {
   field.addEventListener("input", checkForInputFieldChanges);
   field.addEventListener("change", checkForInputFieldChanges);
 });
 
-function checkForInputFieldChanges() { 
+function checkForInputFieldChanges() {
   const hasChanges = [...document.querySelectorAll(".form-field")].some((field) => field.dataset.originalValue !== field.value);
   saveChangesButton.toggleAttribute("disabled", !hasChanges);
 }

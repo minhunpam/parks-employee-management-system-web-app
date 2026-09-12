@@ -41,7 +41,7 @@
   - **Negative value: hours the employee still owes**
   - **Positive value: extra hours the employee has accumulated**
   - **Zero: fully balanced**
-  
+
   - Example:
     ```text
       January: -4 hours

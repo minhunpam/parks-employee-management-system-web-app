@@ -54,7 +54,7 @@ CSV_FILENAME = re.compile(
 - `^` - beginning of the string
 - `Schicht_` - literal string `Schicht_`
 
-- `(?P<employee_name>.+)` 
+- `(?P<employee_name>.+)`
   - `(` - start a capturing group
   - `?P<employee_name>` - named group `employee_name`
   - `.+` - matches any non-empty string
@@ -72,7 +72,7 @@ CSV_FILENAME = re.compile(
 - `_(?P<year>20\d{2})` - named group `year`
   - `20\d{2}` - matches any string starting with `20` and followed by two digits === 2000 - 2099
 
-- `\.csv` 
+- `\.csv`
   - `\.` - literal `.` character. The dot must be escaped with a backslash because an unescaped dot means "any character"
   - `csv` - literal `csv` string
 - `$` - end of the string
