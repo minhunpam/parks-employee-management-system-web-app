@@ -12,14 +12,14 @@ class User(AbstractUser):
 
     objects = UserManager()
 
-    # A string describing the name of the field on the user model 
+    # A string describing the name of the field on the user model
     # that is used as the unique identifier
     USERNAME_FIELD = "email"
 
     # A list of field names that are prompted when creating a user
     # via `createsuperuser` management command
     REQUIRED_FIELDS = []
-    
+
     active_configuration = models.ForeignKey(
         "workspace.WorkspaceConfiguration",
         on_delete=models.SET_NULL,

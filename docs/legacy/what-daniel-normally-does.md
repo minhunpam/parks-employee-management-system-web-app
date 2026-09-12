@@ -36,5 +36,4 @@
 - Monthly summaries from sheets
 - PDF export that would be sent to every employee without warnings
 - Plannungsuebersicht is created and sent to Daniel and Robert
-- 
-
+-

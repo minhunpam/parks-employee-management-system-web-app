@@ -14,6 +14,8 @@ from .google_resources import parse_resource_id
 from .google_oauth import build_services
 from .csv_parser import handle_entries, public_holidays
 from .google_sheets_client import GoogleSheetsClient
+from .google_drive_client import GoogleDriveClient
+from googleapiclient.errors import HttpError
 from employees.models import Employee, EmployeeMonth, EmployeeYear
 from accounts.models import User
 from .models import WorkspaceConfiguration
@@ -36,7 +38,7 @@ class WorkspaceConfigurationTests(TestCase):
         return WorkspaceConfiguration.objects.create(**values)
 
     def test_user_can_have_multiple_period_configurations(self):
-        january = self.configuration()
+        self.configuration()
         february = self.configuration(
             spreadsheet_id="february-sheet",
             period_month=2,
@@ -98,6 +100,44 @@ class WorkspaceConfigurationTests(TestCase):
 
         self.assertEqual(response.status_code, 409)
 
+class GoogleDriveResourceValidationTests(SimpleTestCase):
+    def http_404(self):
+        response = SimpleNamespace(status=404, reason="Not Found")
+        return HttpError(response, b"File not found")
+
+    def test_retries_transient_spreadsheet_not_found(self):
+        drive_service = Mock()
+        request = Mock()
+        request.execute.side_effect = [
+            {"id": "folder-id", "mimeType": "application/vnd.google-apps.folder", "capabilities": {"canEdit": True}},
+            self.http_404(),
+            self.http_404(),
+            {"id": "sheet-id", "mimeType": "application/vnd.google-apps.spreadsheet", "capabilities": {"canEdit": True}},
+        ]
+        drive_service.files.return_value.get.return_value = request
+
+        with patch("workspace.google_drive_client.time.sleep") as sleep:
+            folder = GoogleDriveClient(drive_service).validate_drive_resources(
+                "folder-id", "sheet-id"
+            )
+
+        self.assertEqual(folder["id"], "folder-id")
+        self.assertEqual(sleep.call_count, 2)
+        self.assertEqual(request.execute.call_count, 4)
+
+    def test_reports_not_found_after_retries(self):
+        drive_service = Mock()
+        request = Mock()
+        request.execute.side_effect = [self.http_404()] * 3
+        drive_service.files.return_value.get.return_value = request
+
+        with patch("workspace.google_drive_client.time.sleep"):
+            with self.assertRaisesRegex(ValueError, "synchronizing"):
+                GoogleDriveClient(drive_service).validate_drive_resources(
+                    "folder-id", "sheet-id"
+                )
+
+
 class ParseResourceIdTests(SimpleTestCase):
        def test_plain_folder_id(self):
            result = parse_resource_id("folder123", "folder")
@@ -151,7 +191,7 @@ class CsvParserTests(SimpleTestCase):
         gross working time > 6 hours && pause time < 30 minutes ---> fulfill the condition for pause correction
         '''
 
-        
+
         result = handle_entries(
             {
                 "04.06.2026": [
@@ -466,7 +506,7 @@ class BuildGoogleResourcesTests(SimpleTestCase):
 
         self.assertEqual(result, (drive_service, sheets_service, gmail_service))
 
-        
+
         fernet_class.assert_called_once_with(settings.FERNET_KEY)
         fernet.decrypt.assert_called_once_with(b"encrypted-token")
 
@@ -531,4 +571,3 @@ class BuildGoogleResourcesTests(SimpleTestCase):
         )
         gmail_service.users.return_value.getProfile.assert_called_once_with(userId="me")
         gmail_service.users.return_value.getProfile.return_value.execute.assert_called_once_with()
-        

@@ -58,7 +58,7 @@ def deliver_manager_summary(
         if recipient in sent:
             results.append(
                 {
-                    "recipient": recipient, 
+                    "recipient": recipient,
                     "status": "sent"
                 })
             continue
@@ -70,15 +70,15 @@ def deliver_manager_summary(
             sent.append(recipient)
             results.append(
                 {
-                    "recipient": recipient, 
+                    "recipient": recipient,
                     "status": "sent"
                 })
         except Exception as error:
             results.append(
                 {
-                    "recipient": recipient, 
-                    "status": "failed", 
+                    "recipient": recipient,
+                    "status": "failed",
                     "error": str(error)
                 })
-            
+
     return results

@@ -1,12 +1,14 @@
 # Built-in modules
 import io
 import re
+import time
 from typing import ClassVar
 
 # Django modules
 from django.core.exceptions import ObjectDoesNotExist
 
 # Google modules
+from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 
 # Local modules
@@ -14,6 +16,8 @@ from .models import WorkspaceConfiguration
 from employees.models import Employee
 
 class GoogleDriveClient:
+    RESOURCE_LOOKUP_ATTEMPTS: ClassVar[int] = 3
+    RESOURCE_LOOKUP_RETRY_DELAY_SECONDS: ClassVar[int] = 1
     IMPORT_FOLDER_NAME: ClassVar[str] = "Import"
     EXPORT_FOLDER_NAME: ClassVar[str] = "Export"
     IMPORT_CSV_FILENAME_REGEX_PATTERN: ClassVar[re.Pattern] = re.compile(
@@ -23,18 +27,18 @@ class GoogleDriveClient:
         "Januar", "Februar", "März", "April", "Mai", "Juni",
         "Juli", "August", "September", "Oktober", "November", "Dezember",
     )
-    
+
     def __init__(self, drive_service):
         self.drive_service = drive_service
 
     def prepare_csv_import_folders(self, root_folder_id, configuration):
         year = configuration.period_year
-        
+
         folder_name, german_month = self._get_month_folder_name_and_german_month(configuration)
         import_folder, import_folder_created = self._get_or_create_folder(root_folder_id, self.IMPORT_FOLDER_NAME)
         month_import_folder, month_import_folder_created = self._get_or_create_folder(import_folder["id"], folder_name)
-        
-        
+
+
         files = [
             item for item in self._drive_children(month_import_folder["id"])
             if (
@@ -46,7 +50,7 @@ class GoogleDriveClient:
         invalid_import_files = []
         valid_import_files = []
         not_employee_list = []
-        
+
         for item in files:
             match = re.fullmatch(self.IMPORT_CSV_FILENAME_REGEX_PATTERN, item.get("name", ""))
             if not match:
@@ -88,7 +92,7 @@ class GoogleDriveClient:
 
     def prepare_pdf_export_folders(self, root_folder_id, configuration):
         year = configuration.period_year
-        
+
         folder_name, german_month = self._get_month_folder_name_and_german_month(configuration)
         export_folder, export_folder_created = self._get_or_create_folder(root_folder_id, self.EXPORT_FOLDER_NAME)
 
@@ -98,7 +102,7 @@ class GoogleDriveClient:
             item for item in self._drive_children(month_export_folder["id"])
             if item.get("name", "").lower().endswith(".pdf")
         ]
-        
+
         summary_filename = f"Monatsübersicht_{german_month}_{year}_EXPORT.pdf"
         summary_export_file = next(
             (file for file in export_files if file.get("name") == summary_filename),
@@ -127,7 +131,7 @@ class GoogleDriveClient:
             delivery_state = (
                 "sent" if employee and employee.pk in sent_employees else "not_sent"
             )
-                
+
             employee_export_files.append(
                 {
                     "employee": match.group("employee"),
@@ -138,7 +142,7 @@ class GoogleDriveClient:
                     "error": None,
                 }
             )
-        
+
         return {
             "export_folder": export_folder,
             "month_export_folder": month_export_folder,
@@ -176,7 +180,7 @@ class GoogleDriveClient:
 
     def _get_or_create_folder(self, parent_id, name):
         is_created = True
-        
+
         folders = [
             item for item in self._drive_children(parent_id, "application/vnd.google-apps.folder")
             if item.get("name") == name
@@ -194,7 +198,7 @@ class GoogleDriveClient:
             fields="id,name,mimeType",
             supportsAllDrives=False,
         ).execute()
-        
+
         return folder, True
 
     def _drive_children(self, parent_folder_id, mime_type=None):
@@ -233,35 +237,52 @@ class GoogleDriveClient:
 
         return content
 
-    def validate_drive_resources(self, folder_id, spreadsheet_id):
-        folder = self.drive_service.files().get(
-            fileId=folder_id,
-            fields="id,name,mimeType,capabilities(canEdit)",
-            supportsAllDrives=False,
-        ).execute()
+    def _get_resource_metadata(self, file_id, fields):
+        for attempt in range(self.RESOURCE_LOOKUP_ATTEMPTS):
+            try:
+                return self.drive_service.files().get(
+                    fileId=file_id,
+                    fields=fields,
+                    supportsAllDrives=False,
+                ).execute()
+            except HttpError as error:
+                if error.resp.status != 404:
+                    raise
+                if attempt == self.RESOURCE_LOOKUP_ATTEMPTS - 1:
+                    raise ValueError(
+                        "Google could not find this resource. It may still be "
+                        "synchronizing; wait a few seconds and try again, or "
+                        "check that the connected Google account has access. "
+                        "Hint: try to interact with the google spreadsheet and "
+                        "check in folder if the spreadsheet has actually appeared."
+                    ) from error
+                time.sleep(self.RESOURCE_LOOKUP_RETRY_DELAY_SECONDS)
 
-        if folder.get("mimeType") != "application/vnd.google-apps.folder":
+    def validate_drive_resources(self, folder_id, spreadsheet_id):
+        folder = self._get_resource_metadata(
+            folder_id,
+            "id,name,mimeType,capabilities(canEdit)",
+        )
+
+        if folder and folder.get("mimeType") != "application/vnd.google-apps.folder":
             raise ValueError("The Drive resource is not a folder.")
-        if not folder.get("capabilities", {}).get("canEdit"):
+        if folder and not folder.get("capabilities", {}).get("canEdit"):
             raise PermissionError("You need write access to the Drive root folder.")
 
-        spreadsheet_file = self.drive_service.files().get(
-            fileId=spreadsheet_id,
-            fields="id,mimeType,capabilities(canEdit)",
-            supportsAllDrives=False,
-        ).execute()
-        if spreadsheet_file.get("mimeType") != "application/vnd.google-apps.spreadsheet":
+        spreadsheet_file = self._get_resource_metadata(
+            spreadsheet_id,
+            "id,mimeType,capabilities(canEdit)",
+        )
+
+        if spreadsheet_file and spreadsheet_file.get("mimeType") != "application/vnd.google-apps.spreadsheet":
             raise ValueError("The Google resource is not a spreadsheet.")
-        if not spreadsheet_file.get("capabilities", {}).get("canEdit"):
+        if spreadsheet_file and not spreadsheet_file.get("capabilities", {}).get("canEdit"):
             raise PermissionError("You need write access to the main spreadsheet.")
 
         return folder
 
     def archive_file(self, file_id, file_name):
-        if file_name.lower().endswith(".csv"):
-            archived_name = f"{file_name[:-4]}[ARCHIVED].csv"
-        else:
-            archived_name = f"{file_name}[ARCHIVED]"
+        archived_name = f"{file_name[:-4]}[ARCHIVED].csv" if file_name.lower().endswith(".csv") else f"{file_name}[ARCHIVED]"
 
         return self.drive_service.files().update(
             fileId=file_id,
@@ -273,9 +294,8 @@ class GoogleDriveClient:
     def _get_month_folder_name_and_german_month(configuration: WorkspaceConfiguration):
         month = configuration.period_month
         year = configuration.period_year
-        
+
         return (
             f"{month:02d}_{year}",
             GoogleDriveClient.GERMAN_MONTHS[month - 1],
         )
-    

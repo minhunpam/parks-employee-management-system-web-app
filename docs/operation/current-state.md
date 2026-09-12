@@ -19,3 +19,10 @@ docker compose --env-file ../.env -f ./compose.yaml -f ./compose.dev.yaml -p par
 ```
 docker compose --env-file /etc/parks/production.env -f src/compose.yaml -f src/compose.prod.yaml -p parks-dev up -d --build
 ```
+
+- production environment variables and secrets
+- HTTPS configuration
+- DNS for app.parks-graz.at
+- SSH/firewall hardening
+- off-site backups
+- GitHub Actions deployment workflow

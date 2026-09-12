@@ -2,4 +2,22 @@
 //
 // For more documentation on how to configure debug tasks,
 // see: https://zed.dev/docs/debugger
-[]
+[
+  {
+    "label": "Django development server",
+    "adapter": "Debugpy",
+    "request": "launch",
+    "program": "/home/minhun/dev/parks/parks-employee-management-system-web-app/src/backend/manage.py",
+    "python": "/home/minhun/dev/parks/parks-employee-management-system-web-app/venv/bin/python",
+    "cwd": "/home/minhun/dev/parks/parks-employee-management-system-web-app/src/backend",
+    "args": [
+      "runserver",
+      "127.0.0.1:8000",
+      "--insecure",
+      "--noreload"
+    ],
+    "env": {
+      "DJANGO_SETTINGS_MODULE": "config.settings"
+    }
+  }
+]

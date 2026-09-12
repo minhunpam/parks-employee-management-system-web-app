@@ -1,0 +1,60 @@
+---
+name: Deploy production
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to production
+    runs-on: ubuntu-latest
+    environment: parks-production
+
+    steps:
+      - name: Configure SSH
+        env:
+          PRODUCTION_SSH_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
+          PRODUCTION_KNOWN_HOSTS: ${{ secrets.PRODUCTION_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d "$HOME/.ssh"
+          echo "$PRODUCTION_SSH_KEY" > "$HOME/.ssh/parks-production"
+          echo "$PRODUCTION_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/parks-production" "$HOME/.ssh/known_hosts"
+
+      - name: Deploy main to the production server
+        env:
+          PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
+          PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
+        run: |
+          ssh -i "$HOME/.ssh/parks-production" \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$PRODUCTION_USER@$PRODUCTION_HOST" 'bash -se' << 'REMOTE'
+          set -Eeuo pipefail
+
+          cd /opt/parks/app
+          git fetch origin main
+          git checkout main
+          git pull --ff-only origin main
+
+          docker compose \
+            --env-file /etc/parks/production.env \
+            -f src/compose.yaml \
+            -f src/compose.prod.yaml \
+            up -d --build
+
+          docker compose \
+            --env-file /etc/parks/production.env \
+            -f src/compose.yaml \
+            -f src/compose.prod.yaml \
+            exec -T web python manage.py migrate
+
+          docker compose \
+            --env-file /etc/parks/production.env \
+            -f src/compose.yaml \
+            -f src/compose.prod.yaml \
+            ps
+          REMOTE

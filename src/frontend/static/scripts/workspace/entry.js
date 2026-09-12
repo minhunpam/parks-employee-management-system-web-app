@@ -43,7 +43,7 @@ importCsvButton_Check.addEventListener("click", async () => {
     readySignal.classList.remove("border-[#76b900]", "text-[#76b900]");
     readySignal.classList.add("border-[#cccccc]", "text-[#757575]");
   }
-  
+
   importCsvButton_Check.disabled = true;
   importCsvStatus.textContent = "Checking the previous month's import folder…";
 
@@ -95,7 +95,7 @@ importCsvButton_Import.addEventListener("click", async () => {
     readySignal.classList.remove("border-[#76b900]", "text-[#76b900]");
     readySignal.classList.add("border-[#cccccc]", "text-[#757575]");
   }
-  
+
   const response = await fetch(csvImportUrl_Import, {
     method: "POST",
     headers: {
@@ -126,10 +126,10 @@ importCsvButton_Import.addEventListener("click", async () => {
       importCsvStatus.append(error.error);
     }
   }
-  
+
   importCsvButton_Import.disabled = false;
   importCsvButton_Check.disabled = false;
-  
+
   if (response.status === 200) {
     importCsvStatus.textContent = result.message;
     signalPipelinePhases(2);
@@ -141,4 +141,3 @@ importCsvButton_Import.addEventListener("click", async () => {
 rootFolderLink.addEventListener("click", () => {
   setRootFolderAttention(false);
 });
-
