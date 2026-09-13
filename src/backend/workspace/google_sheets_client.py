@@ -1,5 +1,5 @@
 # Built-in modules
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import ClassVar
 from datetime import datetime
 import calendar
@@ -165,7 +165,15 @@ class GoogleSheetsClient:
         elif type_of_day == "Frei":
             warnings.clear()
         else:
-            working_minutes = 8 * 60
+            employee = self._find_employee_for_sheet(sheet_title)
+            if type_of_day in {"Urlaub", "Krankenstand", "Feiertag", "Extern"}:
+                daily_target_hours = (
+                    employee.weekly_target_hours / Decimal(employee.work_days_per_week)
+                ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                working_minutes = int(daily_target_hours * Decimal("60"))
+                pause_minutes = 0
+            else:
+                working_minutes = 0
 
         write_values = [
             shift_start,
@@ -173,7 +181,9 @@ class GoogleSheetsClient:
             pause_end,
             shift_end,
             pause_minutes,
-            round(working_minutes / 60, 2),
+            float((Decimal(working_minutes) / Decimal("60")).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )),
             type_of_day,
             ", ".join(dict.fromkeys(warnings)),
         ]
@@ -331,7 +341,7 @@ class GoogleSheetsClient:
 
     @classmethod
     def _summarize_rows(cls, rows):
-        paid_absence_types = {"Urlaub", "Krankenstand", "Feiertag", "Feiertag bezahlt",}
+        paid_absence_types = {"Urlaub", "Krankenstand", "Feiertag", "Feiertag bezahlt", "Extern",}
 
         worked_hours = Decimal("0.00")
         paid_absence_hours = Decimal("0.00")
