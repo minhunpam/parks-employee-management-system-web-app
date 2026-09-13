@@ -794,10 +794,18 @@ def sheets_preview_write(request):
 
     spreadsheet_id = spreadsheet["spreadsheetId"]
 
-    payload = json.loads(request.body)
-    sheet_title = payload["employee_id"]
-
-    google_sheets_client.parse_manual_entry(payload, spreadsheet_id, sheet_title)
+    try:
+        payload = json.loads(request.body)
+        sheet_title = payload["employee_id"]
+        google_sheets_client.parse_manual_entry(payload, spreadsheet_id, sheet_title)
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as error:
+        return JsonResponse({"error": str(error)}, status=400)
+    except HttpError as error:
+        return JsonResponse(
+            {
+                "error": "The entry could not be saved.",
+                "detail": str(error)
+            }, status=502)
 
     return JsonResponse(
         {

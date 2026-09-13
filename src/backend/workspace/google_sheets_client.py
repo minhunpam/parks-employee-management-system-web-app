@@ -1,13 +1,12 @@
 # Built-in modules
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import ClassVar
-from datetime import datetime
+from datetime import datetime, timedelta
 import calendar
 
 # Django modules
 from django.db import transaction
 from django.db.models import Q
-from django.http import JsonResponse
 
 # Local modules
 from .csv_parser import time_to_minutes, minutes_to_time, public_holidays
@@ -131,16 +130,34 @@ class GoogleSheetsClient:
         return response.get("values", [])
 
     def parse_manual_entry(self, payload, spreadsheet_id, sheet_title):
-        sheet_id = payload.get("employee_id", "")
-        if not sheet_id:
-            return JsonResponse({"error": "employee_id is empty"}, status=400)
+        if not payload.get("employee_id"):
+            raise ValueError("employee_id is empty")
 
-        parsed_date = datetime.strptime(payload["date"], "%d.%m.%Y").date()
-        is_public_holiday = parsed_date in public_holidays(parsed_date.year)
+        def parse_date(value):
+            for date_format in ("%Y-%m-%d", "%d.%m.%Y"):
+                try:
+                    return datetime.strptime(value, date_format).date()
+                except (TypeError, ValueError):
+                    continue
+            raise ValueError("The entry date is invalid.")
+
+        if payload.get("date"):
+            first_date = last_date = parse_date(payload["date"])
+        else:
+            first_date = parse_date(payload.get("date_range_start"))
+            last_date = parse_date(payload.get("date_range_end"))
+
+        if payload.get("type") == "Arbeit" and first_date != last_date:
+            raise ValueError("Arbeit entries must use a single date.")
+        if first_date > last_date:
+            raise ValueError("The date range start cannot be after its end.")
+        if (first_date.year, first_date.month) != (last_date.year, last_date.month):
+            raise ValueError("The date range must stay within the configured month.")
 
         type_of_day = payload.get("type", "")
         shift_start = payload.get("start", "")
         shift_end = payload.get("end", "")
+        is_public_holiday = first_date in public_holidays(first_date.year)
 
         pause_start = ""
         pause_end = ""
@@ -172,8 +189,6 @@ class GoogleSheetsClient:
                 ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
                 working_minutes = int(daily_target_hours * Decimal("60"))
                 pause_minutes = 0
-            else:
-                working_minutes = 0
 
         write_values = [
             shift_start,
@@ -188,19 +203,16 @@ class GoogleSheetsClient:
             ", ".join(dict.fromkeys(warnings)),
         ]
 
-        row_index = payload.get("row_index", None)
-        if row_index is None:
-            return JsonResponse({"error": "row_index is empty"}, status=400)
-        row_number = row_index + 2
-
-        self.sheets_service.spreadsheets().values().update(
-            spreadsheetId=spreadsheet_id,
-            range=f"{sheet_title}!B{row_number}:I{row_number}",
-            valueInputOption="RAW",
-            body={
-                "values": [write_values]
-            }
-        ).execute()
+        working_date = first_date
+        while working_date <= last_date:
+            row_number = working_date.day + 1
+            self.sheets_service.spreadsheets().values().update(
+                spreadsheetId=spreadsheet_id,
+                range=f"{sheet_title}!B{row_number}:I{row_number}",
+                valueInputOption="RAW",
+                body={"values": [write_values]},
+            ).execute()
+            working_date += timedelta(days=1)
 
     @staticmethod
     def entries_to_rows(entries):

@@ -159,7 +159,7 @@
             <div class="mt-6 grid gap-5 sm:grid-cols-2">
                 <label class="text-sm font-bold">
                     Date
-                    <input id="entry-date" name="date" type="date" required class="mt-2 block h-11 w-full border border-[#cccccc] bg-white px-4 font-normal focus:border-2 focus:border-[#76b900] focus:outline-none">
+                    <input id="entry-date" name="date" type="date" required class="mt-2 block h-11 w-full border border-[#cccccc] bg-white px-4 font-normal focus:border-2 focus:ring-2 enabled:focus:ring-[#76b900] focus:outline-none disabled:text-[#cccccc]">
                 </label>
 
                 <label class="text-sm font-bold">
@@ -182,6 +182,16 @@
                 <label class="text-sm font-bold">
                     End
                     <input id="entry-end" name="end" type="time" class="mt-2 block h-11 w-full border border-[#cccccc] bg-white px-4 font-normal focus:border-2 enabled:focus:border-[#76b900] focus:outline-none disabled:text-[#cccccc]">
+                </label>
+
+                <label class="text-sm font-bold">
+                    Date range start
+                    <input id="entry-date-range-start" name="date_range_start" type="date" disabled class="mt-2 block h-11 w-full border border-[#cccccc] bg-white px-4 font-normal focus:border-2 enabled:focus:border-[#76b900] focus:outline-none disabled:text-[#cccccc]">
+                </label>
+
+                <label class="text-sm font-bold">
+                    Date range end
+                    <input id="entry-date-range-end" name="date_range_end" type="date" disabled class="mt-2 block h-11 w-full border border-[#cccccc] bg-white px-4 font-normal focus:border-2 enabled:focus:border-[#76b900] focus:outline-none disabled:text-[#cccccc]">
                 </label>
             </div>
 

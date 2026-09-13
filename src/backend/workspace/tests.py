@@ -299,6 +299,45 @@ class GoogleSheetsSummaryPropagationTests(TestCase):
             vacation_days_used=2,
         )
 
+    def test_manual_absence_range_writes_one_entry_per_day(self):
+        sheets_service = Mock()
+        client = GoogleSheetsClient(sheets_service)
+
+        client.parse_manual_entry(
+            {
+                "employee_id": "Ademir",
+                "date_range_start": "2026-12-10",
+                "date_range_end": "2026-12-12",
+                "type": "Urlaub",
+            },
+            "spreadsheet-id",
+            "Ademir",
+        )
+
+        updates = sheets_service.spreadsheets.return_value.values.return_value.update
+        self.assertEqual(updates.call_count, 3)
+        self.assertEqual(
+            [call.kwargs["range"] for call in updates.call_args_list],
+            ["Ademir!B11:I11", "Ademir!B12:I12", "Ademir!B13:I13"],
+        )
+        for call in updates.call_args_list:
+            self.assertEqual(call.kwargs["body"]["values"][0][6], "Urlaub")
+
+    def test_manual_absence_range_must_stay_in_one_month(self):
+        client = GoogleSheetsClient(Mock())
+
+        with self.assertRaisesRegex(ValueError, "configured month"):
+            client.parse_manual_entry(
+                {
+                    "employee_id": "Ademir",
+                    "date_range_start": "2026-12-31",
+                    "date_range_end": "2027-01-01",
+                    "type": "Urlaub",
+                },
+                "spreadsheet-id",
+                "Ademir",
+            )
+
     def test_imported_december_updates_previous_and_later_balance_chain(self):
         sheets_service = Mock()
         client = GoogleSheetsClient(sheets_service)
