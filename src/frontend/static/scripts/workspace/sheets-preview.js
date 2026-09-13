@@ -36,6 +36,8 @@ const entryDate = document.querySelector("#entry-date");
 const entryType = document.querySelector("#entry-type");
 const entryStart = document.querySelector("#entry-start");
 const entryEnd = document.querySelector("#entry-end");
+const entryDateRangeStart = document.querySelector("#entry-date-range-start");
+const entryDateRangeEnd = document.querySelector("#entry-date-range-end");
 
 const entryFormStatus = document.querySelector("#entry-form-status");
 
@@ -168,10 +170,10 @@ async function loadData({ refresh = false } = {}) {
     }
     else {
       if (result.code === "google_reconnect_required" || response.status === 401) {
-        syncStatus.textContent = `${result.error}`;
         reconnectGoogle.href = connectUrl;
         reconnectGoogle.hidden = false;
       }
+      syncStatus.textContent = `${result.error}`;
     }
   } catch (error) {
     tableStatus.textContent = "Unable to load spreadsheet data.";
@@ -180,82 +182,92 @@ async function loadData({ refresh = false } = {}) {
   }
 }
 
-function openEntryDialog(row = null) {
-  const configuration_period = state.data.configuration_period.split("/");
-  const month = configuration_period[0].length === 2 ? `${configuration_period[0]}` : `0${configuration_period[0]}`;
-  const year = `${configuration_period[1]}`;
-  const days_in_month = getDaysInMonth(Number(month), Number(year));
+function toggleDateFields(type) {
+  const isWork = type === "Arbeit";
 
+  const toggle_require_and_disabeld_for_element = (element, requiredValue, disabledValue) => {
+    if (disabledValue) element.value = "";
+    element.required = requiredValue;
+    element.disabled = disabledValue;
+  }
+
+  toggle_require_and_disabeld_for_element(entryDate, isWork, !isWork);
+
+  toggle_require_and_disabeld_for_element(entryDateRangeStart, !isWork, isWork);
+
+  toggle_require_and_disabeld_for_element(entryDateRangeEnd, !isWork, isWork);
+
+  toggle_require_and_disabeld_for_element(entryStart, isWork, !isWork);
+  toggle_require_and_disabeld_for_element(entryEnd, isWork, !isWork);
+}
+
+function openEntryDialog(row = null) {
+  const configurationPeriod = state.data.configuration_period.split("/");
+  const month = configurationPeriod[0].padStart(2, "0");
+  const year = configurationPeriod[1];
+  const daysInMonth = getDaysInMonth(Number(year), Number(month));
 
   state.editingEntry = row;
   document.querySelector("#entry-dialog-title").textContent = row ? "Correct daily entry" : "Add daily entry";
-  entryDate.min = `${year}-${month}-01`;
-  entryDate.max = `${year}-${month}-${days_in_month}`;
-  entryDate.value = row?.date?.split(".").reverse().join("-") || `${year}-${month}-01`;
-
-
-  const toggle_required_and_disabled = (option) => {
-    if (option === "Arbeit") {
-      entryStart.required = true;
-      entryEnd.required = true;
-      entryStart.disabled = false;
-      entryEnd.disabled = false;
-    }
-    else {
-      entryStart.required = false;
-      entryEnd.required = false;
-      entryStart.disabled = true;
-      entryEnd.disabled = true;
-    }
-  }
+  setDateConstraint([entryDate, entryDateRangeStart, entryDateRangeEnd], year, month, daysInMonth);
 
   entryType.value = row?.type || "Arbeit";
-  toggle_required_and_disabled(entryType.value);
+  toggleDateFields(entryType.value);
 
-  entryType.addEventListener("change", (event) => {
-    const option = event.target.value;
-    toggle_required_and_disabled(option);
-  });
-
-
+  entryType.onchange = () => toggleDateFields(entryType.value);
   entryStart.value = row?.start !== "—" ? row?.start || "" : "";
   entryEnd.value = row?.end !== "—" ? row?.end || "" : "";
 
+  entryStart.setCustomValidity("");
+  entryEnd.setCustomValidity("");
   entryEnd.addEventListener("change", () => {
     if (entryStart.value && entryEnd.value && entryStart.value >= entryEnd.value) {
       entryStart.setCustomValidity("Entry start cannot be later than entry end!");
     }
-  })
+  });
 
   entryFormStatus.textContent = "";
-
   if (typeof dialog.showModal === "function") {
     dialog.showModal();
   }
 }
 
-
+function setDateConstraint(entryDates, year, month, daysInMonth) {
+  entryDates.forEach((dateInput) => {
+    dateInput.min = `${year}-${month}-01`;
+    dateInput.max = `${year}-${month}-${String(daysInMonth).padStart(2, "0")}`;
+  });
+}
 
 async function submitEntry(event) {
   event.preventDefault();
   entryFormStatus.textContent = "Validating entry…";
 
-  const array_decomposed_date = entryDate.value.split("-");
-  const year = array_decomposed_date[0];
-  const month = array_decomposed_date[1];
-  const day = array_decomposed_date[2];
+  const isWork = entryType.value === "Arbeit";
+  const startDate = isWork ? entryDate.value : entryDateRangeStart.value;
+  const endDate = isWork ? entryDate.value : entryDateRangeEnd.value;
 
-  const normalized_date = `${day}.${month}.${year}`
-  const row_index = Number(day) - 1;
+  if (!startDate || !endDate || startDate > endDate) {
+    entryFormStatus.textContent = "Please select a valid date range.";
+    return;
+  }
 
   const payload = {
     employee_id: state.selectedEmployee,
-    date: normalized_date,
     type: entryType.value,
     start: entryStart.value,
     end: entryEnd.value,
-    row_index: row_index,
   };
+
+  if (isWork) {
+    const [year, month, day] = startDate.split("-");
+    payload.date = `${day}.${month}.${year}`;
+    payload.row_index = Number(day) - 1;
+  }
+  else {
+    payload.date_range_start = startDate;
+    payload.date_range_end = endDate;
+  }
 
   try {
     const response = await fetch(writeUrl, {
@@ -268,7 +280,8 @@ async function submitEntry(event) {
     });
 
     if (!response.ok) {
-      throw new Error("The entry could not be saved.");
+      const result = await response.json().catch(() => ({}));
+      throw new Error(result.error || "The entry could not be saved.");
     }
 
     dialog.close();

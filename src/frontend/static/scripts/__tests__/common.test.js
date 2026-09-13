@@ -18,6 +18,10 @@ describe("getDaysInMonth", () => {
     expect(getDaysInMonth(2025, 2)).toBe(28);
   });
 
+  test("returns 30 for June", () => {
+    expect(getDaysInMonth(2026, 6)).toBe(30);
+  });
+
   test("returns 31 for January", () => {
     expect(getDaysInMonth(2025, 1)).toBe(31);
   });
