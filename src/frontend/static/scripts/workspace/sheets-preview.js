@@ -4,6 +4,8 @@ const page = document.querySelector("#sheets-preview-page");
 const overviewUrl = page.dataset.overviewUrl;
 const refreshUrl = page.dataset.refreshUrl;
 const writeUrl = page.dataset.writeUrl;
+const connectUrl = page.dataset.connectUrl;
+const reconnectGoogle = document.querySelector("#reconnect-google");
 
 const state = {
     data: null,
@@ -159,13 +161,17 @@ async function loadData({ refresh = false } = {}) {
       }
     });
 
-    const payload = await response.json();
+    const result = await response.json();
 
     if (response.ok) {
-      setLoadedData(payload.data || payload, Boolean(payload.external_change));
+      setLoadedData(result.data || result, Boolean(result.external_change));
     }
     else {
-      syncStatus.textContent = `${payload.error}`;
+      if (result.code === "google_reconnect_required" || response.status === 401) {
+        syncStatus.textContent = `${result.error}`;
+        reconnectGoogle.href = connectUrl;
+        reconnectGoogle.hidden = false;
+      }
     }
   } catch (error) {
     tableStatus.textContent = "Unable to load spreadsheet data.";

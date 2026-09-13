@@ -15,6 +15,8 @@ from .models import (
     Employee,
     EmployeeMonth,
     EmployeeYear,
+    monthly_hours_from_weekly,
+    recalculate_current_month,
 )
 
 @login_required
@@ -193,11 +195,15 @@ def register(request):
             employment_start_date=date.fromisoformat(payload["employment_start_date"]),
             employment_end_date=date.fromisoformat(payload["employment_end_date"]) if payload["employment_end_date"] else None,
             work_days_per_week=int(payload["work_days_per_week"]),
-            monthly_target_hours=float(payload["monthly_target_hours"]),
+            weekly_target_hours=Decimal(payload["weekly_target_hours"]),
+        )
+        registered_employee.monthly_target_hours = monthly_hours_from_weekly(
+            registered_employee.weekly_target_hours
         )
         registered_employee.full_clean()
-    except (ValidationError) as error:
-        return JsonResponse({"error": error.message_dict}, status=400)
+    except (KeyError, TypeError, ValueError, InvalidOperation, ValidationError) as error:
+        details = error.message_dict if isinstance(error, ValidationError) else {"form": ["Please provide valid employee details."]}
+        return JsonResponse({"error": details}, status=400)
 
     registered_employee.save()
 
@@ -232,6 +238,7 @@ def employee_details(request, employee_id):
                 employee.working_status = Employee.WorkingStatus.ARCHIVED
                 employee.employment_end_date = date.today()
             else:
+                previous_weekly_hours = employee.weekly_target_hours
                 employee.first_name = payload["first_name"]
                 employee.last_name = payload["last_name"]
                 employee.email = payload["email"]
@@ -244,10 +251,15 @@ def employee_details(request, employee_id):
                     if payload.get("employment_end_date") else None
                 )
                 employee.work_days_per_week = int(payload["work_days_per_week"])
-                employee.monthly_target_hours = Decimal(payload["monthly_target_hours"])
+                employee.weekly_target_hours = Decimal(payload["weekly_target_hours"])
+                employee.monthly_target_hours = monthly_hours_from_weekly(
+                    employee.weekly_target_hours
+                )
 
             employee.full_clean()
             employee.save()
+            if payload.get("action") != "archive" and previous_weekly_hours != employee.weekly_target_hours:
+                recalculate_current_month(employee)
         except (KeyError, TypeError, ValueError, InvalidOperation, ValidationError) as error:
             details = error.message_dict if isinstance(error, ValidationError) else {"form": ["Please provide valid employee details."]}
 

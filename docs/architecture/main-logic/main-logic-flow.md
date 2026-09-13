@@ -91,6 +91,6 @@ CSV_FILENAME = re.compile(
   - `Arbeit`: calculate working time from start/end; work longer than six hours gets an automatically generated zero-minute pause.
   - Public-holiday work is doubled and marked `Feiertag-Arbeit`.
   - `Frei`: reset the row to zero hours and clear warnings.
-  - Other selectable absence types currently become eight paid-absence hours; this is provisional business logic.
+  - Other selectable absence types (`Urlaub`, `Krankenstand`, `Feiertag`, and `Extern`) receive paid-absence hours calculated as `weekly_target_hours / work_days_per_week`, rounded to two decimals.
   - Manual writes are marked with `Manuell` unless the row is reset with `Frei`.
 - The UI requires start/end only for `Arbeit`, checks that end is later than start, and limits dates to the configured month.

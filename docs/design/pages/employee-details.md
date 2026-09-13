@@ -46,7 +46,7 @@ Employees / Employee details
 ```text
 Employee records
 Manage employee details.
-Update the employee profile and working agreement without changing historical records.
+Update the employee profile and working agreement while preserving older monthly records unless they are explicitly reimported.
 ```
 
 ## Employee details form
@@ -65,8 +65,9 @@ Update the employee profile and working agreement without changing historical re
 
 ### Working agreement
 - Work days per week — required number input constrained to `1`–`7`.
-- Monthly target hours — required number input with a minimum of `0` and a two-decimal step.
-- Supporting copy states that changes apply to future monthly records only.
+- Weekly target hours — required decimal input constrained to `20.00`–`40.00`, with a two-decimal step.
+- Monthly target hours are calculated by the server and are not independently editable.
+- Supporting copy explains that changing weekly hours recalculates the current calendar month and propagates only hour-account opening balances to later months; older months remain unchanged until reimported.
 
 ## Actions and feedback
 - **Save changes:** disabled until a form field differs from its original value. Sends the complete form as a JSON `PATCH` request.
@@ -76,6 +77,7 @@ Update the employee profile and working agreement without changing historical re
 ```text
 Employee details updated successfully.
 ```
+- If weekly target hours changed, the server also recalculates the current calendar month's target and hour-account balances.
 - Server-side validation errors are displayed in the status area.
 
 ## Archive employee
@@ -105,7 +107,7 @@ working_status
 employment_start_date
 employment_end_date
 work_days_per_week
-monthly_target_hours
+weekly_target_hours
 ```
 - The backend validates the submitted employee with `full_clean()` before saving. Invalid dates, duplicate/invalid email values, invalid working status, and other model validation errors return a 400 response with error details.
 
