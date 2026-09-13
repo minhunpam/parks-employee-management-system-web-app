@@ -18,3 +18,8 @@ repos:
     hooks:
       - id: yamllint
         files: ^\.github/workflows/.*\.ya?ml$
+
+# Command pre-commit commands:
+# python -m pre_commit run --all-files
+# python -m pre_commit run --files <file_1> <file_2>
+# Occasionally update hooks: python -m pre_commit autoupdate

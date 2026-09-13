@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The employee register page lets a manager create an employee record before the employee enters the monthly hours workflow. It collects identity, employment status/dates, and the working agreement used to calculate monthly targets.
+The employee register page lets a manager create an employee record before the employee enters the monthly hours workflow. It collects identity, employment status/dates, and the canonical weekly working agreement used to calculate monthly targets.
 
 ## Endpoint and integration
 
@@ -48,9 +48,10 @@ The form is a bordered white technical panel with a 12px green corner square. It
 ### Working agreement
 
 - Work days per week — required number input, constrained to 1–7, default `5`.
-- Monthly target hours — required number input, minimum `0`, two-decimal step, default `173.00`.
+- Weekly target hours — required decimal input, constrained to `20.00`–`40.00`, two-decimal step, default `40.00`.
+- Monthly target hours are calculated and stored by the server using `weekly_target_hours × 13 / 3`; they are not entered independently.
 
-The form preserves the existing IDs and names because the JavaScript payload is generated from `FormData`.
+The form preserves the existing field IDs and submits `weekly_target_hours` through the JavaScript `FormData` payload; monthly target hours are not submitted.
 
 ## Actions and feedback
 

@@ -97,10 +97,14 @@ The existing Employee Dashboard remains the database-backed reporting view. The 
 
 ### Manual entry rules currently implemented
 - `Arbeit` requires start and end times in the UI. The backend calculates working minutes from the two times.
-- Entries longer than six hours receive an automatically generated pause start/end; the pause duration is currently zero minutes.
+- Entries longer than six hours receive an automatically generated pause start/end. The pause duration follows the existing spreadsheet-entry rule and must remain consistent with the CSV import behavior.
 - Work on a public holiday is doubled and receives the `Feiertag-Arbeit` warning.
 - `Frei` clears warnings and writes zero working hours.
-- Other currently selectable types (`Urlaub`, `Krankenstand`, `Feiertag`, and `Extern`) are temporarily treated as eight paid-absence hours by the backend. This rule is provisional and requires business confirmation.
+- Other currently selectable types (`Urlaub`, `Krankenstand`, `Feiertag`, and `Extern`) credit the employee's daily target calculated from the working agreement:
+  - `weekly_target_hours / work_days_per_week`
+  - The result is rounded to two decimal places.
+  - For example, an employee with 40 weekly hours and 5 work days receives `40 / 5 = 8.00` credited hours.
+
 - Every manual write receives the `Manuell` warning unless the `Frei` rule clears warnings.
 - The frontend validates that the end time is later than the start time and restricts the date to the configured month.
 
