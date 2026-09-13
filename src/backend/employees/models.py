@@ -1,18 +1,27 @@
 # Built-in modules
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import override
 
 # Django modules
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.core.validators import MaxValueValidator, MinValueValidator
+from django.db import models, transaction
 from django.conf import settings
+from django.db.models import Q
 from django.utils import timezone
 
 DEFAULT_WORK_DAYS_PER_WEEK = 5
+DEFAULT_WEEKLY_TARGET_HOURS = Decimal("40.00")
 DEFAULT_MONTHLY_TARGET_HOURS_STRING = "173.00"
 DEFAULT_MONTHLY_TARGET_HOURS = 173
+WEEKLY_TO_MONTHLY = Decimal("13") / Decimal("3")
 ANNUAL_ALLOWED_VACATION_DAYS = 25
 
+
+def monthly_hours_from_weekly(weekly_hours):
+    return (Decimal(weekly_hours) * WEEKLY_TO_MONTHLY).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
 
 def current_year():
     return timezone.localdate().year
@@ -62,7 +71,22 @@ class Employee(models.Model):
             })
 
     # Work agreement
-    work_days_per_week = models.PositiveIntegerField(default=DEFAULT_WORK_DAYS_PER_WEEK)
+    work_days_per_week = models.PositiveIntegerField(
+        default=DEFAULT_WORK_DAYS_PER_WEEK,
+        validators=[
+            MinValueValidator(1),
+            MaxValueValidator(7)
+        ],
+    )
+    weekly_target_hours = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=DEFAULT_WEEKLY_TARGET_HOURS,
+        validators=[
+            MinValueValidator(Decimal("20.00")),
+            MaxValueValidator(Decimal("40.00"))
+        ],
+    )
     monthly_target_hours = models.DecimalField(
         max_digits=6,
         decimal_places=2,
@@ -74,6 +98,14 @@ class Employee(models.Model):
             models.UniqueConstraint(
                 fields=["owner", "email"],
                 name="unique_owner_employee_email",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(work_days_per_week__gte=1, work_days_per_week__lte=7),
+                name="work_days_per_week_range",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(weekly_target_hours__gte=Decimal("20.00"), weekly_target_hours__lte=Decimal("40.00")),
+                name="weekly_target_hours_range",
             ),
             models.CheckConstraint(
                 condition=(
@@ -182,13 +214,37 @@ class EmployeeMonth(models.Model):
         update_fields = kwargs.get("update_fields")
         if update_fields is not None:
             kwargs["update_fields"] = set(update_fields) | {
-                "credited_working_hours",
-                "hour_difference",
-                "closing_hour_account_balance",
-                "closing_vacation_balance",
+                "credited_working_hours", "hour_difference",
+                "closing_hour_account_balance", "closing_vacation_balance",
             }
-
         super().save(*args, **kwargs)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+
+@transaction.atomic
+def recalculate_current_month(employee):
+    """
+        Apply a changed agreement to this month and carry only balances forward.
+    """
+
+    today = timezone.localdate()
+    current = EmployeeMonth.objects.filter(
+        employee=employee, year=today.year, month=today.month
+    ).first()
+
+    if current is None:
+        return
+    current.target_working_hours = employee.monthly_target_hours
+    current.save()
+
+    balance = current.closing_hour_account_balance
+    for record in EmployeeMonth.objects.filter(employee=employee).filter(
+        Q(year__gt=today.year) |
+        Q(year=today.year, month__gt=today.month)
+    ).order_by("year", "month"):
+        record.opening_hour_account_balance = balance
+        record.save(
+            update_fields=["opening_hour_account_balance"]
+        )

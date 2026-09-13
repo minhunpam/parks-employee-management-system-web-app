@@ -39,6 +39,7 @@
         data-overview-url="{{ sheets_preview_overview_url|default:'' }}"
         data-refresh-url="{{ sheets_preview_refresh_url|default:'' }}"
         data-write-url="{{ sheets_preview_write_url|default:'' }}"
+        data-connect-url="{% url 'workspace:connect' %}"
     >
         <section class="bg-black text-white" aria-labelledby="preview-heading">
             <div class="mx-auto flex max-w-7xl flex-col gap-8 px-6 py-14 lg:flex-row lg:items-end lg:justify-between lg:px-8 lg:py-16">
@@ -77,6 +78,10 @@
                     <p class="text-sm font-bold uppercase tracking-wide text-[#76b900]">Monthly overview</p>
                     <h2 id="period-title" class="mt-2 text-3xl font-bold">Configured month</h2>
                     <p id="sync-status" class="mt-2 text-sm text-[#757575]" role="status" aria-live="polite">Ready to load spreadsheet data.</p>
+                    <a id="reconnect-google" hidden class="mt-4 inline-block text-sm font-bold text-[#0046a4] underline hover:text-black focus:outline-none focus:ring-2 focus:ring-[#76b900]">
+                        Reconnect Google
+                        <!--<span aria-hidden="true">→</span>-->
+                    </a>
                 </div>
                 <span id="protection-status" class="inline-flex items-center self-start border border-[#cccccc] px-3 py-2 text-xs font-bold uppercase tracking-wide text-[#757575]">Read-only preview</span>
             </div>
