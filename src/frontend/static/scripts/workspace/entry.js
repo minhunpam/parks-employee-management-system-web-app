@@ -7,7 +7,7 @@ const connectUrl = entryPage.dataset.connectUrl;
 
 const importCsvButton_Check = document.querySelector("#import-csv-button-check");
 const importCsvButton_Import = document.querySelector("#import-csv-button-import");
-const importCsvStatus = document.querySelector("#import-csv-status-check");
+const importCsvStatus = document.querySelector("#import-csv-status");
 const reconnectGoogle = document.querySelector("#reconnect-google");
 
 const rootFolderLink = document.querySelector("#root-folder-link");
@@ -87,11 +87,15 @@ importCsvButton_Check.addEventListener("click", async () => {
 });
 
 importCsvButton_Import.addEventListener("click", async () => {
+  importCsvStatus.textContent = "Importing CSV files...";
 
   importCsvButton_Check.disabled = true;
   importCsvButton_Import.disabled = true;
   signalPipelinePhases(1);
-  if (readySignal.classList.contains("border-[#76b900]") && readySignal.classList.contains("text-[#76b900]")) {
+  if (
+    readySignal.classList.contains("border-[#76b900]") &&
+    readySignal.classList.contains("text-[#76b900]")
+  ) {
     readySignal.classList.remove("border-[#76b900]", "text-[#76b900]");
     readySignal.classList.add("border-[#cccccc]", "text-[#757575]");
   }
