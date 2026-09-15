@@ -83,8 +83,8 @@ class Employee(models.Model):
         decimal_places=2,
         default=DEFAULT_WEEKLY_TARGET_HOURS,
         validators=[
-            MinValueValidator(Decimal("20.00")),
-            MaxValueValidator(Decimal("40.00"))
+            MinValueValidator(Decimal("1.00")),
+            MaxValueValidator(Decimal("50.00"))
         ],
     )
     monthly_target_hours = models.DecimalField(
@@ -104,7 +104,7 @@ class Employee(models.Model):
                 name="work_days_per_week_range",
             ),
             models.CheckConstraint(
-                condition=models.Q(weekly_target_hours__gte=Decimal("20.00"), weekly_target_hours__lte=Decimal("40.00")),
+                condition=models.Q(weekly_target_hours__gte=Decimal("1.00"), weekly_target_hours__lte=Decimal("50.00")),
                 name="weekly_target_hours_range",
             ),
             models.CheckConstraint(

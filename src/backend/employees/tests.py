@@ -22,11 +22,20 @@ class WorkingAgreementTests(TestCase):
         )
         employee.full_clean()
 
+        '''
+        This with-block asserts that `employee.full_clean()` must raise a ValidationError
+        - If validation raises the expected error, the test passes
+        - Otherwise, test fails
+        '''
         employee.work_days_per_week = 8
         with self.assertRaises(ValidationError):
             employee.full_clean()
 
         employee.work_days_per_week = 7
-        employee.weekly_target_hours = Decimal("40.01")
+        employee.weekly_target_hours = Decimal("50.01")
+        with self.assertRaises(ValidationError):
+            employee.full_clean()
+
+        employee.weekly_target_hours = Decimal("0.99")
         with self.assertRaises(ValidationError):
             employee.full_clean()
