@@ -28,3 +28,13 @@
 - [x] 4.4 Update employee-management architecture documentation to describe the cap, registration baseline, lock rule, forward-only schedule recalculation, latest-value behavior, and signed balances; verify the documentation matches implemented behavior.
 - [x] 4.5 Run the relevant Django employee and workspace test suites and verify existing five-day balance-chain scenarios remain passing.
 - [x] 4.6 Run `openspec validate calculate-vacation-balance-by-workdays --type change` and verify all artifacts and scenarios validate successfully.
+
+## 5. Correct schedule-change accrual recalculation
+
+- [x] 5.1 Add `EmployeeMonth.work_days_per_week`, its validation and schema migration, and backfill existing monthly records from the registration baseline/current policy; verify historical and registration-month values.
+- [x] 5.2 Replace direct previous-closing-balance propagation during schedule changes with the policy-conversion and monthly-accrual algorithm; verify the ten-month no-usage example reaches 25 days.
+- [x] 5.3 Add usage-aware conversion and precision/rounding behavior; verify the ten-month, two-days-used example reaches `275/12` before persistence rounding.
+- [x] 5.4 Recalculate current and subsequent month records with the latest policy while preserving earlier records; verify repeated schedule changes, negative balances, carry-over, and missing-month paths.
+- [x] 5.5 Keep normal spreadsheet imports on their existing balance path while recording monthly workday policy; verify imports do not independently trigger schedule-change accrual.
+- [x] 5.6 Update employee-management architecture documentation and relevant integration tests to describe the monthly policy snapshots and schedule-change-only accrual behavior.
+- [x] 5.7 Run the Django employee/workspace suites, frontend tests, and `openspec validate calculate-vacation-balance-by-workdays --type change`; verify all revised scenarios pass.

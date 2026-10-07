@@ -2,9 +2,55 @@
 
 ## Purpose
 
-This capability ensures annual vacation entitlement and balances reflect the employee's working-day schedule while preserving historical monthly records and supporting deficits.
+This capability ensures vacation entitlement reflects the employee's workday policy and that schedule changes recalculate only the affected period using transparent monthly accrual and preserved historical policies.
 
 ## ADDED Requirements
+
+### Requirement: Monthly records preserve their workday policy
+Each monthly employee record SHALL retain the workday policy applicable to that month.
+
+#### Scenario: Imported historical month stores its baseline policy
+- **WHEN** a month before registration is imported
+- **THEN** the monthly record stores `registered_work_days_per_week`
+
+#### Scenario: Registration month stores the current policy
+- **WHEN** the registration month or a later month is created
+- **THEN** the monthly record stores the employee's current `work_days_per_week`
+
+### Requirement: Schedule-change recalculation uses monthly accrual
+When a current workday policy changes, the system SHALL convert the previously earned balance to the new policy and accrue the new policy monthly from the changed month forward.
+
+#### Scenario: Ten months under four days followed by two months under five days
+- **WHEN** an employee has a 20-day annual entitlement for the first ten months and changes to a 25-day entitlement in November without vacation usage
+- **THEN** the recalculated balance is `20 × 10/12 × 25/20 + 25 × 2/12 = 25` days, subject to the system's persisted precision policy
+
+#### Scenario: Ten months under four days with two used days
+- **WHEN** an employee has a 20-day annual entitlement for the first ten months, uses 2 vacation days, and changes to a 25-day entitlement in November
+- **THEN** the recalculated balance is `18 × 10/12 × 25/20 + 25 × 2/12 = 275/12` days, subject to the system's persisted precision policy
+
+### Requirement: Schedule changes recalculate only the current period forward
+A schedule-change recalculation SHALL update the changed month, later monthly records, and the current yearly balance, while preserving monthly records before the changed month.
+
+#### Scenario: Previous months remain unchanged
+- **WHEN** the current schedule changes during a year
+- **THEN** monthly workday policies, usage, opening balances, and closing balances before the changed month remain unchanged
+
+#### Scenario: Later months use the latest policy
+- **WHEN** the employee changes schedule more than once
+- **THEN** the changed month and subsequent months use the latest saved policy without creating schedule-history records
+
+### Requirement: Normal imports retain their existing calculation mode
+The monthly accrual recalculation SHALL run only when a schedule change explicitly triggers it.
+
+#### Scenario: Month import without a schedule change
+- **WHEN** a spreadsheet month is imported and the employee's schedule has not changed
+- **THEN** the import uses the existing month-import balance behavior and does not independently apply the schedule-change conversion algorithm
+
+#### Scenario: Schedule change followed by month import
+- **WHEN** a schedule change has recalculated the forward chain and a later month is imported
+- **THEN** the imported usage is incorporated without changing preserved months before the schedule change
+
+## MODIFIED Requirements
 
 ### Requirement: Annual vacation entitlement is capped at 25 days
 The system SHALL calculate annual allowed vacation days as `min(work_days_per_week * 5, 25)`.
@@ -61,26 +107,11 @@ The system SHALL allow `registered_work_days_per_week` to change while no `Emplo
 - **WHEN** an `EmployeeMonth` exists before the employee's registration month
 - **THEN** attempts to change `registered_work_days_per_week` are rejected and the stored baseline remains unchanged
 
-### Requirement: Schedule changes recalculate the current year forward
-When an employee's current working days change, the system SHALL recalculate the current month, subsequent months, and the current yearly balance using the latest value, while leaving past monthly records unchanged.
-
-#### Scenario: Current-month schedule change
-- **WHEN** an employee changes from 5 to 4 working days per week
-- **THEN** the current month's vacation opening and closing balances, the current yearly record, and subsequent monthly balances are recalculated using a 20-day annual entitlement
-
-#### Scenario: Past months remain unchanged
-- **WHEN** the schedule changes during the year
-- **THEN** monthly vacation balances before the current month retain their stored values
-
-#### Scenario: Multiple schedule changes
-- **WHEN** an employee changes schedule more than once in the same year
-- **THEN** the most recently saved workday value is used for the current month, subsequent months, and current yearly calculation, without storing schedule history
-
 ### Requirement: Vacation balances support deficits
 The system SHALL allow vacation balance and carried-over balance values to be negative when vacation usage exceeds available entitlement.
 
 #### Scenario: Negative monthly balance
-- **WHEN** an employee uses more vacation days than the month's opening balance
+- **WHEN** an employee uses more vacation days than the month's recalculated opening balance
 - **THEN** the monthly closing vacation balance is negative
 
 #### Scenario: Negative carry-over

@@ -2,25 +2,25 @@
 
 ## Why
 
-Vacation entitlement currently uses a fixed five-day assumption and schedule changes do not consistently update current-year balances. Historical months imported after registration also need a stable registration-time workday value so later edits cannot corrupt their interpretation.
+The current schedule-change recalculation incorrectly carries the previous month's closing vacation balance directly into the current month. When the workday policy changes during a year, the already-earned balance must be converted to the new policy and the remaining months must accrue under the new policy. The applicable workday policy also needs to be retained on each monthly record so recalculation can compare the current month with the previous policy.
 
 ## What Changes
 
-- Calculate annual entitlement as `min(work_days_per_week * 5, 25)` days.
-- Initialize new yearly and monthly vacation balances from the employee-specific capped entitlement.
-- When `work_days_per_week` changes, recalculate the current month, subsequent months, and the current `EmployeeYear`; leave past months unchanged.
-- Use the latest workday value when the schedule changes multiple times; do not store schedule history for current/future recalculation.
-- Store `registered_work_days_per_week` as the baseline for months imported before the employee's registration month.
-- Allow the registered workday value to be corrected until a previous-month record exists, then lock it.
-- Show a registration confirmation dialog explaining the effect of importing previous months.
-- Allow negative vacation balances and negative carried-over vacation days.
-- Add a one-time, idempotent migration to repair legacy records initialized with the fixed 25-day entitlement.
+- Keep the existing capped annual entitlement and registration-baseline behavior.
+- Add the applicable `work_days_per_week` value to each `EmployeeMonth`.
+- Preserve the workday policy on historical monthly records.
+- Recalculate vacation balances with monthly accrual only when a current schedule change triggers recalculation.
+- Convert the balance earned under the previous policy to the new policy instead of copying the previous closing balance.
+- Add the new policy's monthly entitlement to the current and subsequent months while preserving recorded usage.
+- Leave monthly records before the changed month unchanged.
+- Keep normal spreadsheet month imports compatible with their existing behavior; imports do not independently switch the system to the new accrual calculation.
+- Add regression coverage for schedule changes after ten months with and without vacation usage.
 
 ## Capabilities
 
 ### New Capabilities
 
-- `employee-vacation-entitlement`: Determine annual vacation entitlement and vacation balances from an employee's working days per week.
+- `employee-vacation-entitlement`: Determine annual vacation entitlement and schedule-change vacation balances from working-day policies.
 
 ### Modified Capabilities
 
@@ -28,8 +28,6 @@ Vacation entitlement currently uses a fixed five-day assumption and schedule cha
 
 ## Impact
 
-- Affects employee models, registration, schedule-update handling, and monthly/yearly balance recalculation.
-- Affects historical month imports, spreadsheet summary synchronization, and legacy data migration.
-- Requires database migrations for the registered workday field and signed vacation balance fields.
-- Requires frontend confirmation and backend lock validation.
-- Requires tests for capped entitlement, schedule changes, registration baselines, historical imports, repeated changes, legacy repair, negative balances, carry-over, and balance propagation.
+- Affects `EmployeeMonth` persistence, schedule-change recalculation, yearly balance updates, and related migrations.
+- Affects employee and workspace tests and employee-management architecture documentation.
+- Does not change the normal imported-month calculation unless a schedule change explicitly triggers forward recalculation.

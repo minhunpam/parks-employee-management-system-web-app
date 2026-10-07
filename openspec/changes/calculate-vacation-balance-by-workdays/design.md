@@ -2,76 +2,68 @@
 
 ## Context
 
-See `proposal.md` for the motivation and behavioral scope. Employees store a current `work_days_per_week` value, while monthly and yearly vacation balances are persisted separately. Historical months may be imported after registration, so the registration-time workday value must be preserved independently. Existing balance fields use non-negative integer types even though the domain permits deficits.
+See `proposal.md` for the motivation and `specs/employee-vacation-entitlement/spec.md` for the behavioral contract. The current implementation stores monthly balances but not the workday policy that produced them, and schedule changes currently carry the previous closing balance directly into the current month.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- Apply `min(work_days_per_week * 5, 25)` consistently to new and recalculated yearly entitlements.
-- Preserve `registered_work_days_per_week` as the baseline for pre-registration months.
-- Allow correction of that baseline until the first pre-registration month is imported.
-- Recalculate the current month and forward monthly chain when the current schedule changes.
-- Recalculate the current `EmployeeYear` immediately.
-- Preserve stored monthly records before the current month.
-- Support negative balances and negative carry-over.
-- Repair legacy fixed-entitlement records through an idempotent migration.
+- Preserve the applicable workday policy on every monthly record.
+- Apply the conversion and monthly-accrual algorithm only during explicit schedule-change recalculation.
+- Preserve all monthly records before the changed month.
+- Recalculate the current month, later months, and current yearly balance from the latest policy.
+- Keep normal spreadsheet imports on their existing calculation path.
+- Continue supporting capped entitlements, registration baselines, carry-over, and signed balances.
 
 **Non-Goals:**
 
-- No schedule-history table or reconstruction of every prior schedule.
-- No rewriting of past monthly records when the current schedule changes.
-- No change to vacation usage input semantics or API field names.
+- No schedule-history table.
+- No independent accrual recalculation for an ordinary month import.
+- No rewriting of prior monthly records after a schedule change.
+- No change to vacation usage input semantics or public API field names.
 
 ## Decisions
 
-### Centralize the capped entitlement calculation
+### Store the applicable policy on `EmployeeMonth`
 
-Use one domain calculation:
+Add a validated `work_days_per_week` value to `EmployeeMonth`. Historical imports use the registration baseline for pre-registration months; the registration month and later months use the current employee value. When a current schedule changes, the changed month and existing subsequent months receive the latest current value, while prior records remain immutable.
+
+This avoids trying to infer a historical policy from the employee's current value. A schedule-history table was considered but is unnecessary because the contract explicitly preserves only monthly policy snapshots and uses the latest value for forward recalculation.
+
+### Recalculate conversion from the preceding period, not by copying closing balance
+
+For a change in the current month, determine the prior policy from the previous monthly record and the new policy from the employee's current value. Let `old_entitlement` and `new_entitlement` be their capped annual entitlements, and let `elapsed_months` be the number of months completed before the changed month. The converted prior balance is:
 
 ```text
-annual_allowed_vacation_days = min(work_days_per_week * 5, 25)
+(old_entitlement - vacation_used_before_change)
+× elapsed_months / 12
+× new_entitlement / old_entitlement
 ```
 
-Use it for new `EmployeeYear` records, schedule-change recalculation, and legacy repair. The cap keeps six- and seven-day schedules at the 25-day maximum.
+The current month's balance is then completed with the new policy's monthly accrual, less current-month usage. Each subsequent month adds `new_entitlement / 12` and subtracts that month's recorded usage. This directly supports the ten-month examples and avoids treating a prior closing balance as if it were already denominated in the new policy.
 
-### Store and lock the registration baseline
+If no prior monthly record exists, the recalculation starts from the current year's applicable entitlement and carry-over using the new policy. If the old entitlement is zero, the conversion ratio is not applied; the new policy's accrual becomes the starting balance.
 
-Add `registered_work_days_per_week` to `Employee`. During registration, copy the submitted workday value into both the registered and current fields. Existing employees receive a data-migration backfill from their current `work_days_per_week`.
+### Keep import behavior separate
 
-A pre-registration month is an `EmployeeMonth` whose `(year, month)` is earlier than the employee registration month derived from `created_at`. Historical imports use the registered value for these months. The registration month and later months use the current value.
+The spreadsheet synchronization path continues to calculate an imported month using its existing behavior. It records the applicable monthly workday value but does not invoke the schedule-change conversion merely because a month was imported. This preserves compatibility and limits the new algorithm to the event that requires it.
 
-The registered value remains editable while no pre-registration month exists. Once one exists, the backend rejects changes to the registered value; the frontend disables the control and explains why. The registration confirmation dialog warns that later imports of previous months use this baseline and current schedule changes do not rewrite those imported records.
+### Rebuild yearly balance from the recalculated monthly result
 
-### Apply the latest current schedule forward
-
-When `work_days_per_week` changes, update the employee and recalculate the current calendar month's vacation opening and closing balances. Recalculate subsequent monthly balances from that point forward and update the current year's annual entitlement and balance. Do not modify earlier monthly records and do not retain current schedule history. A later schedule change repeats the same process using the newest value.
-
-The current month's opening balance is derived from the preceding month's stored closing balance where available, or from the recalculated yearly entitlement plus carry-over when no preceding month exists. Its closing balance is derived after applying that month's recorded vacation usage. Subsequent months receive the propagated balance while retaining their recorded usage.
-
-### Use signed integer balance fields
-
-Change these fields to signed integer database fields:
-
-- `EmployeeYear.carried_over_vacation_days`
-- `EmployeeYear.vacation_balance`
-- `EmployeeMonth.opening_vacation_balance`
-- `EmployeeMonth.closing_vacation_balance`
-
-Keep `annual_allowed_vacation_days` and `vacation_days_used` non-negative. A negative yearly closing balance becomes negative carry-over for the next year.
-
-### Repair legacy records once
-
-Add a data migration that identifies legacy yearly records using the fixed 25-day entitlement, applies the capped entitlement, preserves carry-over, and rebuilds affected monthly and yearly derived balances from recorded vacation usage. The migration must be idempotent and must not be used for later schedule edits.
+After recalculating the current and later monthly records, update the current `EmployeeYear` from the resulting current-year balance and recorded usage. At a year boundary, preserve the signed closing balance as carry-over and start the next year's available balance with its entitlement plus carry-over.
 
 ## Risks / Trade-offs
 
-- [Risk] Without schedule history, repeated current-schedule changes cannot reconstruct earlier current-schedule periods. → Mitigation: explicitly use the latest value only and preserve past monthly records.
-- [Risk] A registered baseline could be changed after historical import and corrupt past data. → Mitigation: enforce the lock in the backend based on the existence of a pre-registration month.
-- [Risk] Forward recalculation may change future stored balances based on the new current-month opening balance. → Mitigation: keep prior months immutable and test propagation boundaries.
-- [Risk] Existing positive-integer columns may contain only non-negative data but future calculations may produce deficits. → Mitigation: use a schema migration and test negative monthly, yearly, and carry-over values.
-- [Risk] Legacy records may have incomplete monthly data. → Mitigation: use available recorded usage, preserve carry-over, make the migration idempotent, and test missing-month paths.
+- [Risk] Persisted monthly balances may use integer database fields while the accrual examples produce fractions. → Mitigation: define and test the existing persistence precision/rounding policy before implementation; keep calculation precision until persistence.
+- [Risk] A missing previous monthly record makes the old policy unavailable. → Mitigation: use the registered/current baseline applicable to the earliest available month and test missing-month paths.
+- [Risk] Updating future stored records can overwrite policies that were manually imported with different historical context. → Mitigation: only update records at or after the explicit schedule-change month; never update prior records.
+- [Risk] Repeated schedule changes could compound conversions. → Mitigation: use the latest current value together with the stored previous-month policy and recalculate the forward chain from the current month each time.
+- [Risk] Normal imports and schedule changes could apply different balance rules. → Mitigation: keep the import path separate and add integration tests for both entry points.
 
 ## Migration Plan
 
-Deploy schema migrations for the registered baseline and signed balance fields. Backfill `registered_work_days_per_week` from `work_days_per_week` for existing employees. Run the legacy data migration after the schema migration, then validate representative reduced-schedule, capped-schedule, historical-import, carry-over, and negative-balance records. Back up the database before deployment; restoring the backup is the rollback path for corrected data.
+1. Add the monthly workday field with a temporary safe default.
+2. Backfill existing monthly records from the applicable employee policy, using the registered baseline for pre-registration months and the current value otherwise.
+3. Enforce the workday range and remove any temporary migration-only default if appropriate.
+4. Deploy the schedule-change recalculation and tests.
+5. Validate ten-month conversion, usage, missing-month, carry-over, repeated-change, and normal-import scenarios. Roll back through the schema migration and application deployment if required.
