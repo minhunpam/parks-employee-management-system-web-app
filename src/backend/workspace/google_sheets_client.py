@@ -10,7 +10,13 @@ from django.db.models import Q
 
 # Local modules
 from .csv_parser import time_to_minutes, minutes_to_time, public_holidays
-from employees.models import Employee, EmployeeMonth, EmployeeYear
+from employees.models import (
+    Employee,
+    EmployeeMonth,
+    EmployeeYear,
+    annual_allowed_vacation_days,
+    determine_work_days_per_week,
+)
 
 class GoogleSheetsClient:
     HEADERS: ClassVar[dict[str, list[str]]] = {
@@ -402,9 +408,20 @@ class GoogleSheetsClient:
         summary = cls._summarize_rows(rows)
 
         with transaction.atomic():
-            employee_year, _ = EmployeeYear.objects.get_or_create(employee=employee, year=target_year, )
+            entitlement_work_days_per_week = determine_work_days_per_week(
+                employee, target_year, target_month
+            )
+            employee_year, _ = EmployeeYear.objects.get_or_create(
+                employee=employee,
+                year=target_year,
+                defaults={
+                    "annual_allowed_vacation_days": annual_allowed_vacation_days(
+                        entitlement_work_days_per_week
+                    )
+                },
+            )
 
-            nearest_previous_month = (
+            different_year_nearest_previous_month = (
                 EmployeeMonth.objects.filter(employee=employee)
                 .filter(year__lt=target_year)
                 .order_by("-year", "-month")
@@ -419,7 +436,7 @@ class GoogleSheetsClient:
                 .order_by("-month")
                 .first()
             )
-            nearest_previous_month = same_year_nearest_previous_month or nearest_previous_month
+            nearest_previous_month = same_year_nearest_previous_month or different_year_nearest_previous_month
 
             opening_hour_balance = (
                 nearest_previous_month.closing_hour_account_balance
@@ -429,10 +446,10 @@ class GoogleSheetsClient:
             opening_vacation_balance = (
                 nearest_previous_month.closing_vacation_balance
                 if nearest_previous_month
-                else employee_year.annual_allowed_vacation_days + employee_year.carried_over_vacation_days
+                else annual_allowed_vacation_days(entitlement_work_days_per_week) + employee_year.carried_over_vacation_days
             )
 
-            updated_month, _ = EmployeeMonth.objects.update_or_create(
+            updated_employee_month, _ = EmployeeMonth.objects.update_or_create(
                 employee=employee,
                 year=target_year,
                 month=target_month,
@@ -446,19 +463,21 @@ class GoogleSheetsClient:
                 },
             )
 
-            later_months = list(
-                EmployeeMonth.objects.filter(
+            subsequent_employee_month_records = list(
+                EmployeeMonth.objects
+                .filter(
                     Q(year__gt=target_year) | Q(year=target_year, month__gt=target_month),
                     employee=employee,
-                ).order_by("year", "month")
+                )
+                .order_by("year", "month")
             )
-            affected_years = {target_year} | {month_record.year for month_record in later_months}
+            affected_years = {target_year} | {month_record.year for month_record in subsequent_employee_month_records}
 
-            hour_balance = updated_month.closing_hour_account_balance
-            vacation_balance = updated_month.closing_vacation_balance
-            nearest_previous_month = updated_month
+            hour_balance = updated_employee_month.closing_hour_account_balance
+            vacation_balance = updated_employee_month.closing_vacation_balance
+            nearest_previous_month = updated_employee_month
 
-            for month_record in later_months:
+            for month_record in subsequent_employee_month_records:
                 month_record.opening_hour_account_balance = hour_balance
                 if month_record.year != nearest_previous_month.year:
                     later_year, _ = EmployeeYear.objects.get_or_create(
@@ -497,6 +516,7 @@ class GoogleSheetsClient:
                     - used_vacation_days
                 )
                 year_record.save(update_fields=["vacation_balance", "updated_at"])
+
 
     @staticmethod
     def _format_public_holiday_rows(spreadsheet, sheet_title, rows, data_row_count,):
@@ -567,6 +587,7 @@ class GoogleSheetsClient:
 
         return requests
 
+
     @staticmethod
     def _create_week_borders(spreadsheet, sheet_title, sunday_row_indices, data_row_count,):
         current_sheet = GoogleSheetsClient.get_sheet(spreadsheet, sheet_title)
@@ -611,6 +632,7 @@ class GoogleSheetsClient:
             )
 
         return requests
+
 
     @staticmethod
     def _protect_whole_sheet(spreadsheet, sheet_title):

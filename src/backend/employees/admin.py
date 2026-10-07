@@ -40,6 +40,7 @@ class EmployeeAdmin(admin.ModelAdmin):
         "working_status",
         "employment_start_date",
         "employment_end_date",
+        "created_at",
     )
     list_filter = ("working_status",)
     search_fields = ("first_name", "last_name", "email")

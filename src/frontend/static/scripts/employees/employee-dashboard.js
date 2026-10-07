@@ -25,9 +25,9 @@ const tableStatus = document.querySelector("#table-status");
 
 const tableDefinitions = {
   employees: {
-    headers: ["ID", "First name", "Last name", "Email", "Working status", "Employment start", "Employment end"],
-    fields: ["id", "first_name", "last_name", "email", "working_status", "employment_start_date", "employment_end_date"],
-    sortable: [null, "first_name", "last_name", "email", "working_status", "employment_start_date", null],
+    headers: ["ID", "First name", "Last name", "Email", "Working status", "Work days per week", "Employment start", "Employment end"],
+    fields: ["id", "first_name", "last_name", "email", "working_status", "work_days_per_week", "employment_start_date", "employment_end_date"],
+    sortable: [null, "first_name", "last_name", "email", "working_status", null, "employment_start_date", null],
     cards: [
       ["total", "Total employees"],
       ["active", "Active employees"],

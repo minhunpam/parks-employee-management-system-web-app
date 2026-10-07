@@ -81,6 +81,15 @@ form.addEventListener("submit", async (event) => {
   const payload = Object.fromEntries(new FormData(form));
   let result;
 
+  const confirmed = window.confirm(
+    "Are you sure every fields were correctly entered?\n\n"
+    + "If previous months are imported, they will use the registered workday value. "
+    + "Later schedule changes will not affect those imported months."
+  );
+  if (!confirmed) {
+    return;
+  }
+
   try {
     result = await registerEmployee(payload);
     if (result.original_response.status === 200) {
