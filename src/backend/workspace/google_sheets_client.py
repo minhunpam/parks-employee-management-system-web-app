@@ -456,6 +456,7 @@ class GoogleSheetsClient:
                 defaults={
                     "opening_hour_account_balance": opening_hour_balance,
                     "target_working_hours": employee.monthly_target_hours,
+                    "work_days_per_week": entitlement_work_days_per_week,
                     "paid_absence_hours": summary["paid_absence_hours"],
                     "worked_hours": summary["worked_hours"],
                     "opening_vacation_balance": opening_vacation_balance,

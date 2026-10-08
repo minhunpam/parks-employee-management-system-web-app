@@ -17,8 +17,6 @@ from .models import (
     EmployeeYear,
     monthly_hours_from_weekly,
     recalculate_current_month,
-    current_year,
-    current_month,
 )
 
 @login_required
@@ -106,7 +104,7 @@ def employee_dashboard_data(request):
             "opening_hour_account_balance": "opening_hour_account_balance",
             "closing_hour_account_balance": "closing_hour_account_balance",
             "opening_vacation_balance": "opening_vacation_balance",
-            "closing_vacation_balance": "closing_vacation_balance"
+            "closing_vacation_balance": "closing_vacation_balance",
         }
         ordering = direction + monthly_sort_fields.get(sort, "year")
         rows = list(queryset.order_by(ordering, "-month", "employee__last_name")[((page - 1) * page_size):(page * page_size)])
@@ -122,6 +120,7 @@ def employee_dashboard_data(request):
                 "closing_hour_account_balance": str(record.closing_hour_account_balance),
                 "opening_vacation_balance": record.opening_vacation_balance,
                 "closing_vacation_balance": record.closing_vacation_balance,
+                "work_days_per_week": record.work_days_per_week,
             } for record in rows],
             "total": total,
             "page": page,
@@ -211,10 +210,11 @@ def register(request):
 
     registered_employee.save()
 
-    registered_employee_year = EmployeeYear.objects.create(
+    EmployeeYear.objects.create(
         employee=registered_employee,
         year=registered_employee.created_at.year,
     )
+
     EmployeeMonth.objects.create(
         employee=registered_employee,
         year=registered_employee.created_at.year,
@@ -258,22 +258,10 @@ def employee_details(request, employee_id):
                 )
 
                 new_work_days_per_week = int(payload["work_days_per_week"])
-                new_registered_work_days = int(payload.get(
-                    "registered_work_days_per_week", employee.registered_work_days_per_week
-                ))
 
+                if not has_pre_registration_month and new_work_days_per_week != employee.registered_work_days_per_week:
+                    employee.registered_work_days_per_week = new_work_days_per_week
 
-                if (
-                    has_pre_registration_month
-                    and new_registered_work_days != employee.registered_work_days_per_week
-                ):
-                    raise ValidationError({
-                        "registered_work_days_per_week": [
-                            "The registered workday baseline cannot be changed after historical import."
-                        ]
-                    })
-
-                employee.registered_work_days_per_week = new_registered_work_days
                 employee.work_days_per_week = new_work_days_per_week
                 employee.weekly_target_hours = Decimal(payload["weekly_target_hours"])
                 employee.monthly_target_hours = monthly_hours_from_weekly(
@@ -303,21 +291,19 @@ def employee_details(request, employee_id):
             else "Employee details updated successfully."
         )
 
-        return JsonResponse({"message": message})
-
-    has_pre_registration_month = EmployeeMonth.objects.filter(
-        employee=employee
-    ).filter(
-        models.Q(year__lt=employee.created_at.year)
-        | models.Q(year=employee.created_at.year, month__lt=employee.created_at.month)
-    ).exists()
+        return JsonResponse({
+            "message": message,
+            "employee": {
+                "work_days_per_week": employee.work_days_per_week,
+                "registered_work_days_per_week": employee.registered_work_days_per_week,
+            },
+        })
 
     return render(
         request,
         "employees/employee-details.html",
         {
             "employee": employee,
-            "registered_work_days_locked": has_pre_registration_month,
         },
     )
 
