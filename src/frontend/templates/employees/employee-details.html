@@ -118,11 +118,8 @@
                                 Registered work days per week
                                 <span class="text-[#e52020]" aria-hidden="true">*</span>
                             </label>
-                            <input id="registered-work-days-per-week" name="registered_work_days_per_week" type="number" min="1" max="7" value="{{ employee.registered_work_days_per_week }}" data-original-value="{{ employee.registered_work_days_per_week }}" required {% if registered_work_days_locked %}disabled{% endif %} class="form-field mt-2 block h-11 w-full border border-[#cccccc] bg-white px-4 text-base text-black focus:border-2 focus:border-[#76b900] focus:outline-none"/>
-
-                            {% if registered_work_days_locked %}
-                            <p class="mt-2 text-sm text-[#757575]">Locked because a pre-registration month has been imported.</p>
-                            {% endif %}
+                            <input id="registered-work-days-per-week" name="registered_work_days_per_week" type="number" min="1" max="7" value="{{ employee.registered_work_days_per_week }}" data-original-value="{{ employee.registered_work_days_per_week }}" required disabled class="form-field mt-2 block h-11 w-full border border-[#cccccc] bg-white px-4 text-base text-black focus:border-2 focus:border-[#76b900] focus:outline-none"/>
+                            <p class="mt-2 text-sm text-[#757575]">This field is read-only</p>
                         </div>
                         <div>
                             <label for="weekly-target-hours" class="block text-base font-bold">

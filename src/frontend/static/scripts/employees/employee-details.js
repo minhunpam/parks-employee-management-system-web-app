@@ -1,4 +1,5 @@
 import { csrfToken } from "../common.js";
+import { syncWorkdayFields } from "./employee-details-state.js";
 
 const page = document.querySelector("#employee-details-page");
 const detailsUrl = page.dataset.detailsUrl;
@@ -54,6 +55,8 @@ form.addEventListener("submit", async (event) => {
       return;
     }
 
+    syncWorkdayFields(result.employee);
+    checkForInputFieldChanges();
     status.textContent = result.message;
   } catch (error) {
     console.error(error);
