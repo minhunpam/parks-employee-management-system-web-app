@@ -35,9 +35,9 @@ const tableDefinitions = {
     ],
   },
   monthly: {
-    headers: ["Employee", "Year", "Month", "Opening hour balance", "Closing hour balance", "Opening vacation balance", "Closing vacation balance"],
-    fields: ["employee", "year", "month", "opening_hour_account_balance", "closing_hour_account_balance", "opening_vacation_balance", "closing_vacation_balance"],
-    sortable: ["employee", "year", "month", "opening_hour_account_balance", "closing_hour_account_balance", "opening_vacation_balance", "closing_vacation_balance"],
+    headers: ["Employee", "Year", "Month", "Opening hour balance", "Closing hour balance", "Opening vacation balance", "Closing vacation balance", "Work days per week"],
+    fields: ["employee", "year", "month", "opening_hour_account_balance", "closing_hour_account_balance", "opening_vacation_balance", "closing_vacation_balance", "work_days_per_week"],
+    sortable: ["employee", "year", "month", "opening_hour_account_balance", "closing_hour_account_balance", "opening_vacation_balance", "closing_vacation_balance", null],
     cards: [
       ["records", "Employees with records"],
       ["closing_hours", "Total closing hour balance"],
@@ -99,6 +99,7 @@ function renderSummaryCards(summary) {
 }
 
 function renderTable(data) {
+  // console.log(data);
   const definition = tableDefinitions[state.tab];
 
   const isEmployeesTab = state.tab === "employees";
