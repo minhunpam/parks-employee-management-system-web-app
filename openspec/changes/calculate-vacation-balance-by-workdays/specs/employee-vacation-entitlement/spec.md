@@ -50,6 +50,24 @@ The monthly accrual recalculation SHALL run only when a schedule change explicit
 - **WHEN** a schedule change has recalculated the forward chain and a later month is imported
 - **THEN** the imported usage is incorporated without changing preserved months before the schedule change
 
+### Requirement: Missing previous monthly records do not trigger accrual
+When the current monthly record has no preceding `EmployeeMonth` for the employee, a schedule update SHALL not apply vacation balance conversion or monthly accrual.
+
+#### Scenario: Schedule changes without a previous month
+- **WHEN** a manager changes `work_days_per_week` and the current month exists but no earlier monthly record exists
+- **THEN** the current month's existing vacation opening and closing balances remain unchanged, while non-vacation employee update behavior continues normally
+
+### Requirement: Employee details updates synchronize read-only workday values
+A successful employee details update SHALL return the persisted current and registered workday values, and the details page SHALL display the returned registered value while keeping its control read-only.
+
+#### Scenario: Current-month schedule update refreshes the registered value
+- **WHEN** a manager saves a valid schedule update while the current month exists
+- **THEN** the response contains the persisted `work_days_per_week` and `registered_work_days_per_week`, and the page updates the registered-workday field to the returned value without a full page navigation
+
+#### Scenario: Registered workday field remains read-only
+- **WHEN** the employee details page is rendered or a successful update is completed
+- **THEN** the `registered_work_days_per_week` control remains disabled/read-only and is not treated as an editable submitted field
+
 ## MODIFIED Requirements
 
 ### Requirement: Annual vacation entitlement is capped at 25 days

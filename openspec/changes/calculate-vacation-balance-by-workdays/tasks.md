@@ -38,3 +38,17 @@
 - [x] 5.5 Keep normal spreadsheet imports on their existing balance path while recording monthly workday policy; verify imports do not independently trigger schedule-change accrual.
 - [x] 5.6 Update employee-management architecture documentation and relevant integration tests to describe the monthly policy snapshots and schedule-change-only accrual behavior.
 - [x] 5.7 Run the Django employee/workspace suites, frontend tests, and `openspec validate calculate-vacation-balance-by-workdays --type change`; verify all revised scenarios pass.
+
+## 6. Synchronize employee details after schedule updates
+
+- [x] 6.1 Extend successful employee details PATCH responses with the persisted current and registered workday values after save/recalculation, and add backend tests covering a current-month update and validation/error responses.
+- [x] 6.2 Update `employee-details.js` to apply returned workday values and their original-value baselines without enabling or submitting the registered-workday control; verify the save button and displayed value reflect the persisted state.
+- [x] 6.3 Add frontend regression coverage for the successful JSON update path and permanently disabled registered-workday input, and update the employee-details page documentation if the response contract is documented there.
+- [x] 6.4 Run the employee backend tests, frontend tests, and `openspec validate calculate-vacation-balance-by-workdays --type change`; verify the read-only field displays the latest persisted value after a current-month edit.
+
+## 7. Correct failed schedule-recalculation scenarios
+
+- [x] 7.1 Fix whole-day vacation balance persistence to apply `ROUND_HALF_UP` before integer conversion, and verify `22.916...` persists as 23.
+- [x] 7.2 Make `recalculate_current_month` preserve existing vacation balances and skip conversion/accrual when no previous monthly record exists; add a regression test for schedule changes without a previous month.
+- [x] 7.3 Update the obsolete registered-baseline endpoint test to verify the read-only baseline remains unchanged while the current workday value can be updated; verify the full employee test suite has no failures.
+- [x] 7.4 Run the employee and workspace backend tests, frontend tests, and `openspec validate calculate-vacation-balance-by-workdays --type change`; verify all five previously failing tests are resolved.

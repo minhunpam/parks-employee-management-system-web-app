@@ -2,32 +2,29 @@
 
 ## Why
 
-The current schedule-change recalculation incorrectly carries the previous month's closing vacation balance directly into the current month. When the workday policy changes during a year, the already-earned balance must be converted to the new policy and the remaining months must accrue under the new policy. The applicable workday policy also needs to be retained on each monthly record so recalculation can compare the current month with the previous policy.
+The employee details endpoint correctly recalculates the current month when the workday schedule changes, but the page only receives a success message. Because `registered_work_days_per_week` is read-only in the form, the displayed value can remain stale after the backend updates it during a valid current-month edit.
 
 ## What Changes
 
-- Keep the existing capped annual entitlement and registration-baseline behavior.
-- Add the applicable `work_days_per_week` value to each `EmployeeMonth`.
-- Preserve the workday policy on historical monthly records.
-- Recalculate vacation balances with monthly accrual only when a current schedule change triggers recalculation.
-- Convert the balance earned under the previous policy to the new policy instead of copying the previous closing balance.
-- Add the new policy's monthly entitlement to the current and subsequent months while preserving recorded usage.
-- Leave monthly records before the changed month unchanged.
-- Keep normal spreadsheet month imports compatible with their existing behavior; imports do not independently switch the system to the new accrual calculation.
-- Add regression coverage for schedule changes after ten months with and without vacation usage.
+- Keep `registered_work_days_per_week` permanently read-only in the employee details UI, including when no historical month has been imported and the current month exists.
+- Return the persisted employee workday values from a successful details update response.
+- Update the read-only registered-workday field and its change-detection baseline from the JSON response without a full page reload.
+- Preserve the existing schedule-change recalculation and registration-baseline rules.
+- Skip vacation accrual/conversion when the current month has no preceding monthly record.
+- Correct whole-day vacation balance rounding.
+- Add backend and frontend regression coverage for the response, display synchronization, and missing-previous-month behavior.
 
 ## Capabilities
 
 ### New Capabilities
-
 - `employee-vacation-entitlement`: Determine annual vacation entitlement and schedule-change vacation balances from working-day policies.
 
 ### Modified Capabilities
-
-<!-- No existing vacation-entitlement capability is present in the project specs. -->
+- None. The existing entitlement and registration behavior is preserved; this change adds client synchronization for already-defined behavior.
 
 ## Impact
 
-- Affects `EmployeeMonth` persistence, schedule-change recalculation, yearly balance updates, and related migrations.
-- Affects employee and workspace tests and employee-management architecture documentation.
-- Does not change the normal imported-month calculation unless a schedule change explicitly triggers forward recalculation.
+- Affects `src/backend/employees/views.py` and employee details endpoint response data.
+- Affects `src/frontend/static/scripts/employees/employee-details.js` and the read-only field behavior on the employee details page.
+- Adds backend endpoint and frontend interaction tests.
+- Does not change the public field name, schedule-change calculation, migration behavior, or archive flow.
