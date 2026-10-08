@@ -7,9 +7,9 @@
     "label": "Django development server",
     "adapter": "Debugpy",
     "request": "launch",
-    "program": "/home/minhun/dev/parks/parks-employee-management-system-web-app/src/backend/manage.py",
-    "python": "/home/minhun/dev/parks/parks-employee-management-system-web-app/venv/bin/python",
-    "cwd": "/home/minhun/dev/parks/parks-employee-management-system-web-app/src/backend",
+    "program": "./src/backend/manage.py",
+    "python": "./venv/bin/python",
+    "cwd": "./src/backend",
     "args": [
       "runserver",
       "127.0.0.1:8000",
@@ -19,5 +19,29 @@
     "env": {
       "DJANGO_SETTINGS_MODULE": "config.settings"
     }
-  }
+  },
+  {
+    "label": "Debug vacation entitlement test",
+    "adapter": "Debugpy",
+    "request": "launch",
+    "program": "./src/backend/manage.py",
+    "cwd": "./src/backend",
+    "args": [
+      "test",
+      "employees.tests.test_vacation_entitlement.VacationEntitlementTests.test_new_year_and_month_use_employee_entitlement"
+    ],
+    "justMyCode": true
+  },
+  {
+    "label": "Employee creation and subsequent modifications test",
+    "adapter": "Debugpy",
+    "request": "launch",
+    "program": "./src/backend/manage.py",
+    "cwd": "./src/backend",
+    "args": [
+      "test",
+      "employees.tests.test_employee_creation_then_subsequent_modification.EmployeeCreationThenSubsequentModificationTests.test_employee_creation_then_subsequent_modification"
+    ],
+    "justMyCode": true
+  },
 ]
