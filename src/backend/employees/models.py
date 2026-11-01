@@ -175,6 +175,8 @@ class Employee(models.Model):
 
     @override
     def save(self, *args, **kwargs):
+
+        # Have to check for the existence of previous months before this could happen
         if self._state.adding:
             self.registered_work_days_per_week = self.work_days_per_week
 
