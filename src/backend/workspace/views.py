@@ -58,8 +58,7 @@ def entry(request):
 
 def _validate_csv_import_context(request):
     '''
-    This function centralizes the validation and preparation of the CSV import context and it can be used by
-    relevant endpoints to ensure consistent CSV import behavior.
+    This function centralizes the validation and preparation of the CSV import context and it can be used by relevant endpoints to ensure consistent CSV import behavior.
     - Validate the Google connection and configuration
     - Validate the configured root folder and spreadsheet IDs
     - Prepare the CSV import folder

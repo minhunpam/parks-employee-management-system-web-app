@@ -124,7 +124,6 @@ function showWorkspaceConfirmation(confirmationPhrase) {
   });
 }
 
-
 async function saveSetup(payload) {
     const isCreating = editingConfigurationId === null;
     const url = isCreating
@@ -203,4 +202,9 @@ form.addEventListener("submit", async (event) => {
     } catch (error) {
         setupStatus.textContent = "Setup could not be saved. Please try again.";
     }
+});
+
+periodMonthInput.addEventListener("change", () => {
+  periodMonthInput.classList.toggle("text-[#898989]", periodMonthInput.value === "");
+  periodMonthInput.classList.toggle("text-black", periodMonthInput.value !== "");
 });

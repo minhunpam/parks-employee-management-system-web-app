@@ -72,6 +72,7 @@ def employee_dashboard_data(request):
                 "last_name": employee.last_name,
                 "email": employee.email,
                 "working_status": employee.get_working_status_display(),
+                "work_days_per_week": employee.work_days_per_week,
                 "employment_start_date": employee.employment_start_date.isoformat(),
                 "employment_end_date": employee.employment_end_date.isoformat() if employee.employment_end_date else "—",
             } for employee in rows],
@@ -103,7 +104,7 @@ def employee_dashboard_data(request):
             "opening_hour_account_balance": "opening_hour_account_balance",
             "closing_hour_account_balance": "closing_hour_account_balance",
             "opening_vacation_balance": "opening_vacation_balance",
-            "closing_vacation_balance": "closing_vacation_balance"
+            "closing_vacation_balance": "closing_vacation_balance",
         }
         ordering = direction + monthly_sort_fields.get(sort, "year")
         rows = list(queryset.order_by(ordering, "-month", "employee__last_name")[((page - 1) * page_size):(page * page_size)])
@@ -119,6 +120,7 @@ def employee_dashboard_data(request):
                 "closing_hour_account_balance": str(record.closing_hour_account_balance),
                 "opening_vacation_balance": record.opening_vacation_balance,
                 "closing_vacation_balance": record.closing_vacation_balance,
+                "work_days_per_week": record.work_days_per_week,
             } for record in rows],
             "total": total,
             "page": page,
@@ -195,6 +197,7 @@ def register(request):
             employment_start_date=date.fromisoformat(payload["employment_start_date"]),
             employment_end_date=date.fromisoformat(payload["employment_end_date"]) if payload["employment_end_date"] else None,
             work_days_per_week=int(payload["work_days_per_week"]),
+            registered_work_days_per_week=int(payload["work_days_per_week"]),
             weekly_target_hours=Decimal(payload["weekly_target_hours"]),
         )
         registered_employee.monthly_target_hours = monthly_hours_from_weekly(
@@ -207,15 +210,16 @@ def register(request):
 
     registered_employee.save()
 
-    registered_employee_month = EmployeeMonth(
+    EmployeeYear.objects.create(
         employee=registered_employee,
+        year=registered_employee.created_at.year,
     )
-    registered_employee_month.save()
 
-    registered_employee_year = EmployeeYear(
+    EmployeeMonth.objects.create(
         employee=registered_employee,
+        year=registered_employee.created_at.year,
+        month=registered_employee.created_at.month,
     )
-    registered_employee_year.save()
 
 
     return JsonResponse(
@@ -229,6 +233,7 @@ def register(request):
 @require_http_methods(["GET", "PATCH"])
 def employee_details(request, employee_id):
     employee = get_object_or_404(Employee, pk=employee_id, owner=request.user)
+    has_pre_registration_month = _has_pre_registration_month(employee, employee.created_at)
 
     if request.method == "PATCH":
         try:
@@ -238,6 +243,7 @@ def employee_details(request, employee_id):
                 employee.working_status = Employee.WorkingStatus.ARCHIVED
                 employee.employment_end_date = date.today()
             else:
+                previous_work_days = employee.work_days_per_week
                 previous_weekly_hours = employee.weekly_target_hours
                 employee.first_name = payload["first_name"]
                 employee.last_name = payload["last_name"]
@@ -250,7 +256,13 @@ def employee_details(request, employee_id):
                     date.fromisoformat(payload["employment_end_date"])
                     if payload.get("employment_end_date") else None
                 )
-                employee.work_days_per_week = int(payload["work_days_per_week"])
+
+                new_work_days_per_week = int(payload["work_days_per_week"])
+
+                if not has_pre_registration_month and new_work_days_per_week != employee.registered_work_days_per_week:
+                    employee.registered_work_days_per_week = new_work_days_per_week
+
+                employee.work_days_per_week = new_work_days_per_week
                 employee.weekly_target_hours = Decimal(payload["weekly_target_hours"])
                 employee.monthly_target_hours = monthly_hours_from_weekly(
                     employee.weekly_target_hours
@@ -258,8 +270,16 @@ def employee_details(request, employee_id):
 
             employee.full_clean()
             employee.save()
-            if payload.get("action") != "archive" and previous_weekly_hours != employee.weekly_target_hours:
+
+            if (
+                payload.get("action") != "archive"
+                and (
+                    previous_work_days != employee.work_days_per_week
+                    or previous_weekly_hours != employee.weekly_target_hours
+                )
+            ):
                 recalculate_current_month(employee)
+
         except (KeyError, TypeError, ValueError, InvalidOperation, ValidationError) as error:
             details = error.message_dict if isinstance(error, ValidationError) else {"form": ["Please provide valid employee details."]}
 
@@ -271,10 +291,28 @@ def employee_details(request, employee_id):
             else "Employee details updated successfully."
         )
 
-        return JsonResponse({"message": message})
+        return JsonResponse({
+            "message": message,
+            "employee": {
+                "work_days_per_week": employee.work_days_per_week,
+                "registered_work_days_per_week": employee.registered_work_days_per_week,
+            },
+        })
 
     return render(
         request,
         "employees/employee-details.html",
-        {"employee": employee},
+        {
+            "employee": employee,
+        },
+    )
+
+def _has_pre_registration_month(employee, registration_datetime):
+    return (
+        EmployeeMonth.objects
+        .filter(employee=employee)
+        .filter(
+            models.Q(year__lt=registration_datetime.year)
+            | models.Q(year=registration_datetime.year, month__lt=registration_datetime.month)
+        ).exists()
     )

@@ -13,7 +13,9 @@
   - `employment_start_date`
   - `employment_end_date`
 - Working agreement:
-  - `work_days_per_week` --- an integer from 1 to 7, default: 5 days (`Arbeitstage/Woche`)
+  - `work_days_per_week` --- the current integer schedule from 1 to 7 (`Arbeitstage/Woche`)
+  - Annual vacation entitlement is capped at 25 days and is calculated from this schedule.
+- `registered_work_days_per_week` --- the registration-time schedule used as the immutable baseline for months imported before registration
   - `weekly_target_hours` --- a decimal from 20.00 to 40.00 hours, default: 40.00 hours (`Sollstunden/Woche`)
   - `monthly_target_hours` --- a stored derived value calculated by the server from `weekly_target_hours` through the formula: $\text{weekly target hours} \times \frac{13}{3} = \text{monthly target hours}$
     - Monthly values are rounded to two decimals with Decimal `ROUND_HALF_UP`. Existing monthly values are preserved during migration.
@@ -25,10 +27,10 @@
 - `employee` --- FK --- references `Employee`
 - `year` --- the year of the employee's employment
 - Vacation:
-  - `annual_allowed_vacation_days` --- by default: 25 days
+  - `annual_allowed_vacation_days` --- calculated as the lower of five times the applicable workdays and 25
   - `carried_over_vacation_days`
-    - Explanation: **unused vacation days from the previous year that remain available in the new year**
-  - `vacation_balance` --- current remaining vacation days
+    - Explanation: **unused vacation days from the previous year that remain available in the new year**; it may be negative when the employee has a deficit
+  - `vacation_balance` --- current remaining vacation days; signed values are preserved
 - `created_at` --- the date and time the record was created
 - `updated_at` --- the date and time the record was last updated
 
@@ -37,6 +39,7 @@
 - `employee` --- FK --- references `Employee`
 - `year` --- the year of the employee's employment
 - `month` --- the month of the employee's employment
+- `work_days_per_week` --- the policy applicable to this month; historical months retain their registration baseline
 
 - `opening_hour_account_balance` --- current remaining opening hour account balance carried into the current month from all previous months
   - **Negative value: hours the employee still owes**
@@ -64,18 +67,21 @@
 - `closing_hour_account_balance` --- the closing hour account balance for the employee in this month
   - Calculation: `closing_hour_account_balance = opening_hour_account_balance + hour_difference`
 
-- `opening_vacation_balance` --- the opening vacation balance for the employee in this month
+- `opening_vacation_balance` --- the signed opening vacation balance for the employee in this month
 - `vacation_days_used` --- the number of vacation days the employee has used this month
-- `closing_vacation_balance` --- the closing vacation balance for the employee in this month
-  - Calculation: `closing_vacation_balance = opening_vacation_balance - vacation_days_used`
+- `closing_vacation_balance` --- the signed closing vacation balance for the employee in this month
+  - During an explicit schedule-change recalculation, the applicable annual entitlement is accrued monthly and vacation usage is deducted.
+  - The prior accrued balance is converted to the new policy before the changed month's accrual is added. Ordinary spreadsheet imports retain their existing calculation behavior.
 - `created_at` --- the date and time the employee record was created
 - `updated_at` --- the date and time the employee record was last updated
 
 ## Management
-- Employee will be registered through a form from the frontend by clicking the "Register Employee" button.
+- Employee will be registered through a form from the frontend by clicking the "Register Employee" button. Registration copies the entered workday schedule into both current and registered fields and confirms that historical imports use this baseline.
+- The registered baseline can be corrected until a month before the registration month exists. After that import, backend validation rejects changes and the details form disables the field.
+- A current schedule change recalculates the current month, current year, and later months only. Earlier monthly records, including their stored workday policies, remain unchanged. The previous policy is converted to the latest policy, then the new annual entitlement is accrued one month at a time. Repeated changes use the latest current value and do not create schedule history.
 - The form collects `weekly_target_hours`; the backend calculates `monthly_target_hours`.
 - `weekly_target_hours` accepts decimal values from 20.00 through 40.00. `work_days_per_week` accepts values from 1 through 7.
-- Employee edits use the same canonical weekly input. Updating it recalculates the current calendar month and propagates only hour-account opening balances to later months. Older months remain unchanged until reimported.
+- Employee edits use the same canonical weekly input. Updating it recalculates current and future hour-account and vacation opening balances. Older months remain unchanged until reimported.
 
 ## Spreadsheet summary synchronization
 - Google Sheets is the source of truth for daily operational entries.

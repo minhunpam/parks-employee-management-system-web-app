@@ -3,7 +3,10 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
-from .models import Employee, monthly_hours_from_weekly
+from employees.models import (
+    Employee,
+    monthly_hours_from_weekly,
+)
 
 
 class WorkingAgreementTests(TestCase):

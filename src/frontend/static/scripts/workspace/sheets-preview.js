@@ -1,4 +1,5 @@
 import { csrfToken, htmlInjectionProtection, getDaysInMonth } from "../common.js";
+import { renderEmployeeRows } from "./employee-table.js";
 
 const page = document.querySelector("#sheets-preview-page");
 const overviewUrl = page.dataset.overviewUrl;
@@ -75,7 +76,6 @@ function renderOverview() {
         <td class="px-4 py-4">
           <button type="button" data-employee-id="${htmlInjectionProtection(row.employeeId)}" class="view-employee whitespace-nowrap text-sm font-bold text-[#0046a4] underline hover:text-black focus:outline-none focus:ring-2 focus:ring-[#76b900]">
             View sheet
-            <span aria-hidden="true">→</span>
           </button>
         </td>
     </tr>`).join("");
@@ -105,25 +105,7 @@ function renderEmployee(employeeId) {
       `<th scope="col" class="border-b border-[#cccccc] px-4 py-4 font-bold">${header}</th>`).join("")}
     </tr>`;
 
-  employeeTableBody.innerHTML = employee.rows.map((row, index) => `
-    <tr class="border-b border-[#cccccc] last:border-0 hover:bg-[#f7f7f7]">
-        <th scope="row" class="px-4 py-4 font-bold">${htmlInjectionProtection(row.date)}</th>
-        <td class="px-2 py-4">${htmlInjectionProtection(row.shiftStart)}</td>
-        <td class="px-4 py-4">${htmlInjectionProtection(row.pauseStart)}</td>
-        <td class="px-4 py-4">${htmlInjectionProtection(row.pauseEnd)}</td>
-        <td class="px-4 py-4">${htmlInjectionProtection(row.shiftEnd)}</td>
-        <td class="px-4 py-4">${htmlInjectionProtection(row.pauseTime)}</td>
-        <td class="px-4 py-4">${htmlInjectionProtection(row.shiftTotalTime)}</td>
-        <td class="px-4 py-4">${htmlInjectionProtection(row.type)}</td>
-        <td class="px-4 py-4 ${row.warnings !== "—" ? "font-bold text-[#df6500]" : "text-[#757575]"}">${htmlInjectionProtection(row.warnings)}</td>
-
-        <td class="px-4 py-4">
-          <button type="button" data-row-index="${index}" class="correct-entry whitespace-nowrap text-sm font-bold text-[#0046a4] underline hover:text-black focus:outline-none focus:ring-2 focus:ring-[#76b900]">
-            Correct
-            <span aria-hidden="true">→</span>
-          </button>
-        </td>
-    </tr>`).join("");
+  employeeTableBody.innerHTML = renderEmployeeRows(employee.rows, htmlInjectionProtection);
 
   employeeEmpty.hidden = employee.rows.length !== 0;
   detailSection.scrollIntoView(

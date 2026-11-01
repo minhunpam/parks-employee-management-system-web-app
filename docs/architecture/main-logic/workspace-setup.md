@@ -1,10 +1,12 @@
-- After being redirected to `workspace/setup` page, user will see a form to configure their workspace.
-- This form will ask the user to enter:
+# Workspace Configuration Setup
+
+After being redirected to `workspace/setup` page, user will see a form to configure their workspace.This form will ask the user to enter:
   1. Drive root folder ID or URL
   2. Main spreadsheet ID or URL
   3. Import month
   4. Import year
-- Once the user enters the required information, submitting the form triggers the event `submit`.
+
+Once the user enters the required information, submitting the form triggers the event `submit`.
 
 ## `submit` Event
 - It extracts the payload from the from and feed that payload to the `saveSetup()` function.
@@ -13,20 +15,17 @@
 - It makes POST request with request's body being the passed-in payload to the Django backend.
 - [Backend handles the request](#how-django-backend-handles-the-request)
 - Frontend receives the response, then handles and displays the result to the user accordingly.
-  - For a successful setup, it will navigate the user to the entry page, in which the UI for main logic will be displayed.
-    - **[See this documentation to understand more](/home/minhun/dev/parks/parks-employee-management-system-web-app/docs/architecture/main-logic-flow.md)**
+  - For a successful setup, it will navigate the user to the entry page, in which the UI for main logic will be displayed. **[See this documentation to understand more](/home/minhun/dev/parks/parks-employee-management-system-web-app/docs/architecture/main-logic/main-logic-flow.md)**
 ---
 
 ## How Django backend handles the request
-- The first thing the backend does is with the request's body is:
-- [Parsing the resource IDs](#parsing-the-resource-ids)
+- The first thing the backend does is with the request's body is: [parsing the resource IDs](#parsing-the-resource-ids)
 - After that, we will try to fetch an existing workspace configuration attached to the request user:
   - If no existing configuration is found, we will create a new one.
   - If an existing configuration is found and any folder, spreadsheet, month, or year value changes, it returns a confirmation challenge and asks the user to confirm with `CHANGE WORKSPACE CONFIG` before updating the configuration.
 - Next step is [validating the resource IDs](#validating-the-resource-ids)
 - The month must be 1–12 and the year must be 2000–2099.
 - After validation, the configuration is created or updated and stores the root folder ID, spreadsheet ID, import month, and import year.
-
 
 ### Parsing the resource IDs:
 - Removing any leading/trailing whitespace from the resource IDs.

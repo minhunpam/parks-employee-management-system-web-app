@@ -25,9 +25,9 @@ const tableStatus = document.querySelector("#table-status");
 
 const tableDefinitions = {
   employees: {
-    headers: ["ID", "First name", "Last name", "Email", "Working status", "Employment start", "Employment end"],
-    fields: ["id", "first_name", "last_name", "email", "working_status", "employment_start_date", "employment_end_date"],
-    sortable: [null, "first_name", "last_name", "email", "working_status", "employment_start_date", null],
+    headers: ["ID", "First name", "Last name", "Email", "Working status", "Work days per week", "Employment start", "Employment end"],
+    fields: ["id", "first_name", "last_name", "email", "working_status", "work_days_per_week", "employment_start_date", "employment_end_date"],
+    sortable: [null, "first_name", "last_name", "email", "working_status", null, "employment_start_date", null],
     cards: [
       ["total", "Total employees"],
       ["active", "Active employees"],
@@ -35,9 +35,9 @@ const tableDefinitions = {
     ],
   },
   monthly: {
-    headers: ["Employee", "Year", "Month", "Opening hour balance", "Closing hour balance", "Opening vacation balance", "Closing vacation balance"],
-    fields: ["employee", "year", "month", "opening_hour_account_balance", "closing_hour_account_balance", "opening_vacation_balance", "closing_vacation_balance"],
-    sortable: ["employee", "year", "month", "opening_hour_account_balance", "closing_hour_account_balance", "opening_vacation_balance", "closing_vacation_balance"],
+    headers: ["Employee", "Year", "Month", "Opening hour balance", "Closing hour balance", "Opening vacation balance", "Closing vacation balance", "Work days per week"],
+    fields: ["employee", "year", "month", "opening_hour_account_balance", "closing_hour_account_balance", "opening_vacation_balance", "closing_vacation_balance", "work_days_per_week"],
+    sortable: ["employee", "year", "month", "opening_hour_account_balance", "closing_hour_account_balance", "opening_vacation_balance", "closing_vacation_balance", null],
     cards: [
       ["records", "Employees with records"],
       ["closing_hours", "Total closing hour balance"],
@@ -99,6 +99,7 @@ function renderSummaryCards(summary) {
 }
 
 function renderTable(data) {
+  // console.log(data);
   const definition = tableDefinitions[state.tab];
 
   const isEmployeesTab = state.tab === "employees";

@@ -77,6 +77,8 @@ Update the employee profile and working agreement while preserving older monthly
 ```text
 Employee details updated successfully.
 ```
+- The successful JSON response includes the persisted current and registered workday values; the page updates both fields and their change-detection baselines without reloading.
+- The registered workday control remains disabled/read-only after every update.
 - If weekly target hours changed, the server also recalculates the current calendar month's target and hour-account balances.
 - Server-side validation errors are displayed in the status area.
 
@@ -98,6 +100,7 @@ Archive this employee? Their history will be preserved and their employment end 
 - `GET /employees/employee-dashboard/<employee_id>` renders the page for the selected employee.
 - `PATCH /employees/employee-dashboard/<employee_id>` updates the employee or archives them.
 - Requests require authentication and include the CSRF token.
+- A successful normal update returns `message` and an `employee` object containing persisted `work_days_per_week` and `registered_work_days_per_week` values.
 - A normal update accepts:
 ```text
 first_name
