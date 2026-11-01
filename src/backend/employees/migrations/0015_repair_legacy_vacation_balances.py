@@ -15,6 +15,7 @@ def repair_legacy_balances(apps, schema_editor):
                 year.save(update_fields=["annual_allowed_vacation_days"])
 
         balance = None
+        previous_year = None
         employee_month_records = EmployeeMonth.objects.filter(employee=employee).order_by("year", "month")
         for employee_month_record in employee_month_records:
             year = next((record for record in years if record.year == employee_month_record.year), None)
@@ -33,6 +34,7 @@ def repair_legacy_balances(apps, schema_editor):
             employee_month_record.closing_vacation_balance = balance - employee_month_record.vacation_days_used
             employee_month_record.save(update_fields=["opening_vacation_balance", "closing_vacation_balance"])
             balance = employee_month_record.closing_vacation_balance
+            previous_year = employee_month_record.year
 
         for year in years:
             used = sum(
