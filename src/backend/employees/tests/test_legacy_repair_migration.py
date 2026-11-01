@@ -37,7 +37,7 @@ class LegacyRepairMigrationTests(TestCase):
         )
 
         migration = import_module(
-            "employees.migrations.0017_rerun_legacy_vacation_repairs"
+            "employees.migrations.0015_repair_legacy_vacation_balances"
         )
         apps = type("Apps", (), {
             "get_model": staticmethod(lambda app, model: {
